@@ -1,11 +1,12 @@
 import "./App.css";
-import LoginPage from "./pages/LoginPage";
+import Layout from "./shared/Layout";
 import "bootstrap/dist/css/bootstrap.min.css";
+import "react-toastify/dist/ReactToastify.css";
 
 function App() {
   return (
     <div className="App">
-      <LoginPage />
+      <Layout />
     </div>
   );
 }

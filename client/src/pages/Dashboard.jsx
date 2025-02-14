@@ -2,33 +2,9 @@ import React from "react";
 import { Container, Row, Col } from "react-bootstrap";
 import Sidebar from "../components/Sidebar";
 import { useLocation } from "react-router-dom";
-
-const AdminDashboard = () => (
-  <div>
-    <h2>Admin Dashboard</h2>
-    <p>Welcome, Admin! You can manage users and configure settings here.</p>
-  </div>
-);
-
-const InstructorDashboard = () => (
-  <div>
-    <h2>Instructor Dashboard</h2>
-    <p>
-      Welcome, Instructor! You can manage courses and interact with students
-      here.
-    </p>
-  </div>
-);
-
-const StudentDashboard = () => (
-  <div>
-    <h2>Student Dashboard</h2>
-    <p>
-      Welcome, Student! View your enrolled courses and participate in
-      discussions.
-    </p>
-  </div>
-);
+import AdminDashboard from "./AdminDashboard";
+import InstructorDashboard from "./InstructorDashboard";
+import StudentDashboard from "./StudentDashboard";
 
 const Dashboard = () => {
   // Get the user data from the location state or local storage

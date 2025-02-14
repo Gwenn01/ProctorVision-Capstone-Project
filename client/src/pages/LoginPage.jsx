@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Container, Button, Form, Card } from "react-bootstrap";
 import "../styles/loginpage.css";
 import logo from "../assets/logo.png";
@@ -9,15 +9,14 @@ import Spinner from "../components/Spinner";
 
 const LoginPage = () => {
   // define the varibales and hooks
-  const location = useLocation();
   const [selectedRole, setSelectedRole] = useState(null);
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
   // handle navigation function to navigate to the next page and store user data
-  const handleNavigation = (path, userData) => {
-    navigate(path, { state: { role: userData } });
+  const handleNavigation = (path, selectedRole) => {
+    navigate(path, { state: { role: selectedRole } });
     setLoading(false);
   };
   // handle login function
@@ -45,7 +44,8 @@ const LoginPage = () => {
       }
       toast.success("Login successful!");
       localStorage.setItem("token", data.token);
-      localStorage.setItem("user", "true");
+      localStorage.setItem("isAuthenticated", "true");
+      localStorage.setItem("userData", data);
       setTimeout(() => {
         handleNavigation("/dashboard", selectedRole);
       }, 1000);

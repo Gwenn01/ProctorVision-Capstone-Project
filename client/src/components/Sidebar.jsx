@@ -2,49 +2,36 @@ import React from "react";
 import { Nav } from "react-bootstrap";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import "../styles/sidebar.css";
+import { toast } from "react-toastify";
 
 const Sidebar = ({ role }) => {
   const navigate = useNavigate();
   const location = useLocation(); // To highlight active links
 
   const handleLogout = () => {
+    // Remove user data from localStorage
     localStorage.removeItem("userData");
     localStorage.removeItem("token");
     localStorage.removeItem("isAuthenticated");
-    navigate("/login", { replace: true });
+
+    toast.success("Logged out successfully!");
+
+    setTimeout(() => {
+      navigate("/login", { replace: true });
+    }, 2000); // Wait 2 seconds before redirecting
   };
 
   const menuItems = {
     Admin: [
-      {
-        href: "admin-dashboard",
-        icon: "speedometer2",
-        label: "Admin Dashboard",
-      },
       { href: "create-account", icon: "people", label: "Create Account" },
       { href: "manage-account", icon: "gear", label: "Manage Account" },
     ],
     Instructor: [
-      {
-        href: "instructor-dashboard",
-        icon: "journal",
-        label: "Instructor Dashboard",
-      },
       { href: "create-exam", icon: "book", label: "Create Exam" },
       { href: "manage-exam", icon: "chat", label: "Manage Exam" },
       { href: "manage-student", icon: "person", label: "Manage Student" },
-      {
-        href: "manage-attendance",
-        icon: "clipboard",
-        label: "Student Behavior",
-      },
     ],
     Student: [
-      {
-        href: "student-dashboard",
-        icon: "house-door",
-        label: "Student Dashboard",
-      },
       { href: "take-exam", icon: "book", label: "Take Exam" },
       { href: "student-behavior", icon: "bar-chart", label: "Exam Behavior" },
     ],

@@ -1,17 +1,24 @@
 import React from "react";
 import { Container, Row, Col } from "react-bootstrap";
 import Sidebar from "../components/Sidebar";
-import { useLocation } from "react-router-dom";
 import AdminDashboard from "./AdminDashboard";
 import InstructorDashboard from "./InstructorDashboard";
 import StudentDashboard from "./StudentDashboard";
 
 const Dashboard = () => {
-  // Get the user data from the location state or local storage
-  const location = useLocation();
-  const userData =
-    location.state || JSON.parse(localStorage.getItem("userData")) || {};
-  const role = userData?.role || "user";
+  // Safely retrieve user data from localStorage
+  let storedUserData = localStorage.getItem("userData");
+
+  let userData;
+  try {
+    userData = storedUserData ? JSON.parse(storedUserData) : {};
+  } catch (error) {
+    console.error("Error parsing userData from localStorage:", error);
+    userData = {};
+  }
+
+  // Always use role from localStorage instead of location.state
+  const role = userData?.role || "Student";
 
   let Content;
   if (role === "Admin") {

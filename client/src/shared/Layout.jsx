@@ -10,7 +10,7 @@ const Layout = () => {
       <Route path="/" element={<Login />} />
       <Route path="/login" element={<Login />} />
       <Route
-        path="/dashboard"
+        path="/dashboard/*"
         element={
           <ProtectedRoute>
             <Dashboard />

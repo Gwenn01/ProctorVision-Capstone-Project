@@ -1,0 +1,22 @@
+.sidebar {
+  width: 250px;
+  background-color: #212529;
+}
+
+.nav-link {
+  transition: background 0.3s ease, color 0.3s ease;
+  font-size: 1rem;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-link.active {
+  background-color: #007bff !important;
+  color: white !important;
+}
+
+.logout-button:hover {
+  background-color: rgba(255, 0, 0, 0.2);
+}

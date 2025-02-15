@@ -8,54 +8,54 @@ import "react-toastify/dist/ReactToastify.css";
 import Spinner from "../components/Spinner";
 
 const LoginPage = () => {
-  // define the varibales and hooks
   const [selectedRole, setSelectedRole] = useState(null);
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
-  // handle navigation function to navigate to the next page and store user data
-  const handleNavigation = (path, selectedRole) => {
-    navigate(path, { state: { role: selectedRole } });
-    setLoading(false);
-  };
-  // handle login function
+
+  // ✅ Handle login request to backend
   const handleLogin = async (e) => {
     e.preventDefault();
-    // check if the username and password are empty
+
     if (!username || !password) {
       toast.error("Please enter both username and password.");
       return;
     }
-    //
+
     try {
       setLoading(true);
-      // fetch the data into the database
+
+      // 🔹 Send API request to Flask server
       const response = await fetch("http://127.0.0.1:5000/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password }), // ✅ Send credentials only, role is determined by backend
       });
 
-      const data = await response.json();
-      // check if the data is valid
       if (!response.ok) {
-        throw new Error(response.status);
+        if (response.status === 401) {
+          throw new Error("Invalid username or password");
+        } else {
+          throw new Error(`Server error: ${response.status}`);
+        }
       }
-      toast.success("Login successful!");
+
+      const data = await response.json(); // ✅ Parse response JSON correctly
+
+      // ✅ Store token and user data in localStorage
       localStorage.setItem("token", data.token);
       localStorage.setItem("isAuthenticated", "true");
-      localStorage.setItem("userData", data);
+      localStorage.setItem("userData", JSON.stringify(data)); // Store user info
+
+      toast.success("Login successful!");
+
+      // ✅ Redirect to dashboard with correct role
       setTimeout(() => {
-        handleNavigation("/dashboard", selectedRole);
+        navigate("/dashboard");
       }, 1000);
-      // display the error if the data is invalid
     } catch (error) {
-      if (error.message === "401") {
-        toast.error("Invalid username or password. Please try again.");
-      } else {
-        toast.error("Server error. Please check your connection.");
-      }
+      toast.error(error.message);
     } finally {
       setLoading(false);
     }

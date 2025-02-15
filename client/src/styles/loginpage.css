@@ -37,3 +37,54 @@
   width: 70%;
   font-size: 0.8rem;
 }
+/* Login Container */
+.login-container {
+  color: white;
+}
+
+/* Role Selection */
+.role-selection {
+  background: rgb(229, 229, 229);
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+  width: 30rem;
+}
+
+/* Buttons */
+.button-container .buttons {
+  font-size: 1.1rem;
+  padding: 12px 25px;
+  border-radius: 8px;
+  width: 150px;
+}
+
+.buttons:hover {
+  background-color: #007bff;
+  color: white;
+}
+
+/* Login Card */
+.login-card {
+  background: white;
+  padding: 30px;
+  border-radius: 10px;
+  width: 24rem;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Form Icons */
+.input-group-text {
+  background: #f0f0f0;
+  border: none;
+  padding: 10px;
+}
+
+.input-group input {
+  border-left: none;
+}
+
+.input-group-text svg {
+  font-size: 1.2rem;
+  color: #333;
+}

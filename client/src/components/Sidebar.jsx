@@ -30,6 +30,11 @@ const Sidebar = ({ role }) => {
       { href: "create-exam", icon: "book", label: "Create Exam" },
       { href: "manage-exam", icon: "chat", label: "Manage Exam" },
       { href: "manage-student", icon: "person", label: "Manage Student" },
+      {
+        href: "student-behavior",
+        icon: "bar-chart",
+        label: "Student Behavior",
+      },
     ],
     Student: [
       { href: "take-exam", icon: "book", label: "Take Exam" },

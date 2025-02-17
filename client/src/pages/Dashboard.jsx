@@ -12,6 +12,7 @@ import ManageStudentEnroll from "./InstructorDashboard/ManageStudentEnroll";
 import StudentBehavior from "./InstructorDashboard/StudentBehavior";
 // this is for student
 import TakeExam from "./StudentDashboard/TakeExam";
+import YourBehavior from "./StudentDashboard/YourBehavior";
 
 const Dashboard = () => {
   // Get user data from localStorage
@@ -60,6 +61,7 @@ const Dashboard = () => {
                 <>
                   <Route path="/" element={<TakeExam />} />{" "}
                   <Route path="take-exam" element={<TakeExam />} />{" "}
+                  <Route path="your-behavior" element={<YourBehavior />} />{" "}
                 </>
               )}
               <Route path="*" element={<h4>Page Not Found</h4>} />

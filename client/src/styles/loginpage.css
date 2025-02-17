@@ -1,45 +1,30 @@
-/* Logo styling */
+/* Centered and Responsive Logo */
 .content-login {
-  margin-bottom: 0.8rem;
+  text-align: center;
+  margin-bottom: 1rem;
 }
+
 .content-login img {
-  height: 3rem;
-  width: 3rem;
+  height: 4rem;
+  width: auto;
+  max-width: 100px;
+  display: block;
+  margin: 0 auto;
 }
+
 /* Headings */
 .content-login h2 {
-  font-size: 0.8rem;
+  font-size: 1rem;
   color: black;
   font-weight: bold;
-  margin-bottom: 0%;
+  margin-bottom: 0.2rem;
 }
 
 .content-login p {
-  font-size: 0.6rem;
+  font-size: 0.8rem;
   color: black;
   font-weight: lighter;
-  margin-bottom: 0%;
-}
-.role-button {
-  border: 1px solid rgb(239, 239, 239);
-  padding: 1.5rem;
-  border-radius: 0.8rem;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-}
-.button-container {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-}
-.button-container .buttons {
-  width: 70%;
-  font-size: 0.8rem;
-}
-/* Login Container */
-.login-container {
-  color: white;
+  margin-bottom: 0.2rem;
 }
 
 /* Role Selection */
@@ -48,15 +33,26 @@
   padding: 30px;
   border-radius: 10px;
   box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-  width: 30rem;
+  width: 100%;
+  max-width: 30rem;
+  text-align: center;
 }
 
 /* Buttons */
+.button-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
 .button-container .buttons {
   font-size: 1.1rem;
   padding: 12px 25px;
   border-radius: 8px;
-  width: 150px;
+  width: 70%;
+  max-width: 200px;
 }
 
 .buttons:hover {
@@ -64,12 +60,24 @@
   color: white;
 }
 
+/* Login Container */
+.login-container {
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
 /* Login Card */
 .login-card {
   background: white;
   padding: 30px;
   border-radius: 10px;
-  width: 24rem;
+  width: 100%;
+  max-width: 24rem;
   box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
 }
 
@@ -87,4 +95,30 @@
 .input-group-text svg {
   font-size: 1.2rem;
   color: #333;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .content-login img {
+    height: 3rem;
+    max-width: 80px;
+  }
+
+  .content-login h2 {
+    font-size: 0.9rem;
+  }
+
+  .content-login p {
+    font-size: 0.7rem;
+  }
+
+  .login-card {
+    padding: 20px;
+  }
+
+  .button-container .buttons {
+    font-size: 1rem;
+    padding: 10px 20px;
+    width: 80%;
+  }
 }

@@ -27,8 +27,8 @@ const Sidebar = ({ role }) => {
       { href: "manage-account", icon: "gear", label: "Manage Account" },
     ],
     Instructor: [
-      { href: "create-exam", icon: "book", label: "Create Exam" },
-      { href: "manage-exam", icon: "chat", label: "Manage Exam" },
+      //{ href: "create-exam", icon: "book", label: "Create Exam" },
+      //{ href: "manage-exam", icon: "chat", label: "Manage Exam" },
       { href: "manage-student", icon: "person", label: "Manage Student" },
       {
         href: "student-behavior",

@@ -1,7 +1,6 @@
 import cv2
 import mediapipe as mp
 import time
-import numpy as np
 
 # Initialize MediaPipe Face Mesh
 mp_face_mesh = mp.solutions.face_mesh
@@ -44,18 +43,9 @@ while cap.isOpened():
 
             # Extract key facial landmarks
             nose_tip = face_landmarks.landmark[1]  # Nose tip
-            left_eye = face_landmarks.landmark[33]  # Left eye center
-            right_eye = face_landmarks.landmark[263]  # Right eye center
-            left_iris = face_landmarks.landmark[468]  # Left iris center
-            right_iris = face_landmarks.landmark[473]  # Right iris center
-            chin = face_landmarks.landmark[152]  # Chin landmark
-
+            
             # Convert normalized coordinates to pixel values
             nose_x, nose_y = int(nose_tip.x * w), int(nose_tip.y * h)
-            left_eye_x, left_eye_y = int(left_eye.x * w), int(left_eye.y * h)
-            right_eye_x, right_eye_y = int(right_eye.x * w), int(right_eye.y * h)
-            left_iris_x, left_iris_y = int(left_iris.x * w), int(left_iris.y * h)
-            right_iris_x, right_iris_y = int(right_iris.x * w), int(right_iris.y * h)
 
             # Head movement detection
             if nose_y < (h // 2) - 40:  
@@ -69,26 +59,8 @@ while cap.isOpened():
             else:
                 direction_text = "Looking Forward"
 
-            # Eye gaze detection
-            gaze_text = "Looking at Screen"
-
-            # Compute relative iris position inside eye
-            left_gaze_offset = left_iris_x - left_eye_x
-            right_gaze_offset = right_iris_x - right_eye_x
-
-            # Define thresholds for looking away
-            if left_gaze_offset < -5 and right_gaze_offset < -5:
-                gaze_text = "Looking Left (Away from Screen)"
-            elif left_gaze_offset > 5 and right_gaze_offset > 5:
-                gaze_text = "Looking Right (Away from Screen)"
-            elif left_iris_y < left_eye_y - 5 and right_iris_y < right_eye_y - 5:
-                gaze_text = "Looking Up (Away from Screen)"
-            elif left_iris_y > left_eye_y + 5 and right_iris_y > right_eye_y + 5:
-                gaze_text = "Looking Down (Away from Screen)"
-
             # Display the detected head movement
             cv2.putText(frame, direction_text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.putText(frame, gaze_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
     # Display the FPS
     cTime = time.time()
@@ -97,7 +69,7 @@ while cap.isOpened():
     cv2.putText(frame, f'FPS: {int(fps)}', (10, 20), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1)
 
     # Display the frame
-    cv2.imshow("Face Mesh Head & Eye Gaze Detection", frame)
+    cv2.imshow("Face Mesh Head Movement Detection", frame)
 
     # Press 'q' to exit
     if cv2.waitKey(1) & 0xFF == ord('q'):

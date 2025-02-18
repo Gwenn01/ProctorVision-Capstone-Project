@@ -17,6 +17,12 @@ cap = cv2.VideoCapture(0)
 pTime = 0
 direction_text = "Looking Forward"
 
+# Thresholds for more precise head movement detection
+LOOK_UP_THRESHOLD = 60
+LOOK_DOWN_THRESHOLD = 60
+LOOK_LEFT_THRESHOLD = 80
+LOOK_RIGHT_THRESHOLD = 80
+
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
@@ -47,15 +53,15 @@ while cap.isOpened():
             # Convert normalized coordinates to pixel values
             nose_x, nose_y = int(nose_tip.x * w), int(nose_tip.y * h)
 
-            # Head movement detection
-            if nose_y < (h // 2) - 40:  
+            # Head movement detection with stricter thresholds
+            if nose_y < (h // 2) - LOOK_UP_THRESHOLD:  
                 direction_text = "Looking Up"
-            elif nose_y > (h // 2) + 40:  
+            elif nose_y > (h // 2) + LOOK_DOWN_THRESHOLD:  
                 direction_text = "Looking Down"
-            elif nose_x < (w // 2) - 50:  
-                direction_text = "Looking Right"
-            elif nose_x > (w // 2) + 50:  
-                direction_text = "Looking Left"
+            elif nose_x < (w // 2) - LOOK_LEFT_THRESHOLD:  
+                direction_text = "Looking Far Right"
+            elif nose_x > (w // 2) + LOOK_RIGHT_THRESHOLD:  
+                direction_text = "Looking Far Left"
             else:
                 direction_text = "Looking Forward"
 

@@ -6,8 +6,8 @@ import Sidebar from "../components/Sidebar";
 import CreateAccount from "./AdminDashboard/CreateAccount";
 import ManageAccount from "./AdminDashboard/ManageAccount";
 // this is for instructor
-//import CreateExam from "./InstructorDashboard/CreateExam";
-//import ManageExam from "./InstructorDashboard/ManageExam";
+import CreateExam from "./InstructorDashboard/CreateExam";
+import ManageExam from "./InstructorDashboard/ManageExam";
 import ManageStudentEnroll from "./InstructorDashboard/ManageStudentEnroll";
 import StudentBehavior from "./InstructorDashboard/StudentBehavior";
 // this is for student
@@ -45,14 +45,12 @@ const Dashboard = () => {
               {role === "Instructor" && (
                 <>
                   <Route path="/" element={<ManageStudentEnroll />} />
-                  {/* 
-                  <Route path="create-exam" element={<CreateExam />} />
-                  <Route path="manage-exam" element={<ManageExam />} />
-                  */}
                   <Route
                     path="manage-student"
                     element={<ManageStudentEnroll />}
                   />
+                  <Route path="create-exam" element={<CreateExam />} />
+                  <Route path="manage-exam" element={<ManageExam />} />
                   <Route
                     path="student-behavior"
                     element={<StudentBehavior />}

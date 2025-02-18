@@ -18,7 +18,7 @@ const Sidebar = ({ role }) => {
 
     setTimeout(() => {
       navigate("/login", { replace: true });
-    }, 2000); // Wait 2 seconds before redirecting
+    }, 1000); // Wait 2 seconds before redirecting
   };
 
   const menuItems = {
@@ -27,9 +27,9 @@ const Sidebar = ({ role }) => {
       { href: "manage-account", icon: "gear", label: "Manage Account" },
     ],
     Instructor: [
-      //{ href: "create-exam", icon: "book", label: "Create Exam" },
-      //{ href: "manage-exam", icon: "chat", label: "Manage Exam" },
       { href: "manage-student", icon: "person", label: "Manage Student" },
+      { href: "create-exam", icon: "book", label: "Exam Title" },
+      { href: "manage-exam", icon: "chat", label: "Manage Exam" },
       {
         href: "student-behavior",
         icon: "bar-chart",

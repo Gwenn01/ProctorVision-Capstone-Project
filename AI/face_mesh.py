@@ -7,10 +7,9 @@ import os
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
 
-# Initialize drawing utils
+# Initialize drawing utils DRAWING FACE
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
-
 draw_specs = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
 # Create directory to save images
@@ -26,8 +25,8 @@ direction_text = "Looking Forward"
 # Adjusted thresholds for more precise head movement detection
 LOOK_UP_THRESHOLD = 100
 LOOK_DOWN_THRESHOLD = 100
-LOOK_LEFT_THRESHOLD = 120
-LOOK_RIGHT_THRESHOLD = 120
+LOOK_LEFT_THRESHOLD = 110
+LOOK_RIGHT_THRESHOLD = 110
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -45,6 +44,7 @@ while cap.isOpened():
     # Draw face mesh landmarks if detected
     if results.multi_face_landmarks:
         for face_landmarks in results.multi_face_landmarks:
+            # landmarks drawing DRAWING FACE
             mp_drawing.draw_landmarks(
                 frame,
                 face_landmarks,

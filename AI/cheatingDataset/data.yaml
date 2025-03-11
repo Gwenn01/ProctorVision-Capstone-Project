@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['cheating', 'no_cheating']
+
+roboflow:
+  workspace: bigpro
+  project: cheating-t2urr
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/bigpro/cheating-t2urr/dataset/1

@@ -36,7 +36,7 @@ const CreateExam = () => {
     <Container className="mt-4">
       <Card className="shadow-lg p-4">
         <Card.Body>
-          <h2 className="text-center mb-3">Create Exam</h2>
+          <h2 className="text-center mb-3">Exam Setup</h2>
 
           {!isExamCreated ? (
             <>

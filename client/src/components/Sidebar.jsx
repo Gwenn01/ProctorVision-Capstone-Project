@@ -13,9 +13,9 @@ const Sidebar = ({ role }) => {
     localStorage.removeItem("userData");
     localStorage.removeItem("token");
     localStorage.removeItem("isAuthenticated");
-
-    toast.success("Logged out successfully!");
-
+    toast.success("Logged out successfully!", {
+      autoClose: 2000, // Keep the toast visible longer
+    });
     setTimeout(() => {
       navigate("/login", { replace: true });
     }, 1000); // Wait 2 seconds before redirecting

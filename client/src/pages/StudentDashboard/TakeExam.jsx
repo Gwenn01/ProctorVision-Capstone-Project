@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Container, Card, Button, Form, ProgressBar } from "react-bootstrap";
+import axios from "axios";
 
 const TakeExam = () => {
-  // Sample exam data
   const exams = [
     { id: 1, title: "Math Exam", duration: 10 },
     { id: 2, title: "Science Test", duration: 15 },
@@ -11,6 +11,7 @@ const TakeExam = () => {
   const [selectedExam, setSelectedExam] = useState(null);
   const [timer, setTimer] = useState(0);
   const [isTakingExam, setIsTakingExam] = useState(false);
+  const [classification, setClassification] = useState("");
 
   // Timer Countdown
   useEffect(() => {
@@ -33,7 +34,7 @@ const TakeExam = () => {
       return;
     }
     setIsTakingExam(true);
-    setTimer(selectedExam.duration * 60); // Convert minutes to seconds
+    setTimer(selectedExam.duration * 60);
   };
 
   // Submit Exam
@@ -41,6 +42,27 @@ const TakeExam = () => {
     alert("Exam Submitted! Thank you.");
     setIsTakingExam(false);
     setSelectedExam(null);
+  };
+
+  // Capture and classify frame
+  const captureFrame = async () => {
+    try {
+      const response = await fetch("http://127.0.0.1:5000/video_feed");
+      const blob = await response.blob();
+      const file = new File([blob], "frame.jpg", { type: "image/jpeg" });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      /*const result = await axios.post(
+        "http://127.0.0.1:5000/classify",
+        formData
+      );
+      setClassification(result.data.classification);
+      */
+    } catch (error) {
+      console.error("Error capturing frame:", error);
+    }
   };
 
   return (
@@ -92,6 +114,29 @@ const TakeExam = () => {
               Time Left: {Math.floor(timer / 60)}:{timer % 60 < 10 ? "0" : ""}
               {timer % 60}
             </p>
+
+            {/* Live Webcam Feed */}
+            <div className="text-center mt-3">
+              <h5>Live Camera Feed</h5>
+              <img
+                src="http://127.0.0.1:5000/video_feed"
+                alt="Webcam Stream"
+                width="640"
+                height="480"
+              />
+            </div>
+
+            {/* Cheating Detection Result */}
+            <div className="text-center mt-3">
+              <Button variant="warning" onClick={captureFrame}>
+                Check for Suspicious Behavior
+              </Button>
+              {classification && (
+                <p className="mt-2">
+                  <strong>Classification: </strong> {classification}
+                </p>
+              )}
+            </div>
 
             <div className="d-flex justify-content-between mt-4">
               <Button

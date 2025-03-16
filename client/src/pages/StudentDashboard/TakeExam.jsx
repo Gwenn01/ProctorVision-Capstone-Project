@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Container, Card, Button, Form, ProgressBar } from "react-bootstrap";
+import {
+  Container,
+  Card,
+  Button,
+  Form,
+  ProgressBar,
+  Modal,
+  Row,
+  Col,
+} from "react-bootstrap";
 import axios from "axios";
 
 const TakeExam = () => {
@@ -11,7 +20,12 @@ const TakeExam = () => {
   const [selectedExam, setSelectedExam] = useState(null);
   const [timer, setTimer] = useState(0);
   const [isTakingExam, setIsTakingExam] = useState(false);
-  const [classification, setClassification] = useState("");
+  const [warningMessage, setWarningMessage] = useState("");
+  const [showWarning, setShowWarning] = useState(false);
+  const [lastCapture, setLastCapture] = useState("");
+  const [capturedImages, setCapturedImages] = useState([]); // Store captured images
+  const [results, setResults] = useState([]); // Store classification results
+  const [showResults, setShowResults] = useState(false); // Control results modal visibility
 
   // Timer Countdown
   useEffect(() => {
@@ -21,7 +35,39 @@ const TakeExam = () => {
     }
   }, [isTakingExam, timer]);
 
-  // Handle selecting an exam
+  // Check for suspicious behavior and capture images
+  useEffect(() => {
+    if (isTakingExam) {
+      const interval = setInterval(async () => {
+        try {
+          const response = await axios.get(
+            "http://127.0.0.1:5000/api/detect_warning"
+          );
+          console.log("Warning Response:", response.data); // Debugging Log
+
+          if (response.data.warning !== "Looking Forward") {
+            setWarningMessage(response.data.warning);
+            setShowWarning(true);
+
+            // Capture image for each unique warning
+            if (
+              response.data.capture &&
+              lastCapture !== response.data.warning
+            ) {
+              setLastCapture(response.data.warning);
+              captureFrame(response.data.warning);
+            }
+          }
+        } catch (error) {
+          console.error("Error detecting warning:", error);
+        }
+      }, 3000); // Check every 3 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [isTakingExam, lastCapture]);
+
+  // Select Exam
   const handleExamSelect = (e) => {
     const exam = exams.find((exam) => exam.id === parseInt(e.target.value));
     setSelectedExam(exam);
@@ -35,33 +81,67 @@ const TakeExam = () => {
     }
     setIsTakingExam(true);
     setTimer(selectedExam.duration * 60);
+    setCapturedImages([]); // Clear previous exam images
+    setResults([]); // Clear previous exam results
+    setShowResults(false); // Hide results modal
   };
 
-  // Submit Exam
-  const handleSubmitExam = () => {
-    alert("Exam Submitted! Thank you.");
-    setIsTakingExam(false);
-    setSelectedExam(null);
-  };
-
-  // Capture and classify frame
-  const captureFrame = async () => {
+  const handleSubmitExam = async () => {
     try {
-      const response = await fetch("http://127.0.0.1:5000/video_feed");
+      await axios.post("http://127.0.0.1:5000/api/stop_camera");
+      alert("Exam Submitted! Checking behavior...");
+      await checkBehavior(); // ✅ Process images
+    } catch (error) {
+      console.error("Error stopping camera:", error);
+    }
+    setIsTakingExam(false);
+  };
+
+  // Capture Frame & Store Image Locally
+  const captureFrame = async (warningLabel) => {
+    try {
+      const response = await fetch("http://127.0.0.1:5000/api/video_feed");
       const blob = await response.blob();
-      const file = new File([blob], "frame.jpg", { type: "image/jpeg" });
+      const imageUrl = URL.createObjectURL(blob);
 
-      const formData = new FormData();
-      formData.append("file", file);
-
-      /*const result = await axios.post(
-        "http://127.0.0.1:5000/classify",
-        formData
-      );
-      setClassification(result.data.classification);
-      */
+      // Store captured image along with the label
+      setCapturedImages((prevImages) => [
+        ...prevImages,
+        { image: imageUrl, label: warningLabel },
+      ]);
     } catch (error) {
       console.error("Error capturing frame:", error);
+    }
+  };
+
+  // Send all captured images for classification after the exam
+  const checkBehavior = async () => {
+    try {
+      const formData = new FormData();
+
+      for (let i = 0; i < capturedImages.length; i++) {
+        const blob = await fetch(capturedImages[i].image).then((res) =>
+          res.blob()
+        );
+
+        formData.append(
+          "files",
+          new File([blob], `image_${i}.jpg`, { type: "image/jpeg" })
+        );
+      }
+
+      // Send the request
+      const response = await axios.post(
+        "http://127.0.0.1:5000/api/classify_multiple",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } } // ✅ Important!
+      );
+
+      // ✅ Store results and show the results modal
+      setResults(response.data.results);
+      setShowResults(true); // Ensure modal shows up
+    } catch (error) {
+      console.error("Error classifying images:", error);
     }
   };
 
@@ -69,8 +149,23 @@ const TakeExam = () => {
     <Container className="mt-4">
       <h2 className="mb-4">Take Exam</h2>
 
-      {/* Step 1: Choose Exam */}
-      {!isTakingExam && (
+      {/* Warning Modal */}
+      <Modal show={showWarning} onHide={() => setShowWarning(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>⚠️ Warning</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>{`Warning: You are ${warningMessage}`}</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="danger" onClick={() => setShowWarning(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Exam Selection */}
+      {!isTakingExam && results.length === 0 && (
         <>
           <Form.Group className="mb-3">
             <Form.Label>Select Exam</Form.Label>
@@ -97,7 +192,7 @@ const TakeExam = () => {
         </>
       )}
 
-      {/* Step 2: Exam Timer & Submit Button */}
+      {/* Exam in Progress */}
       {isTakingExam && selectedExam && (
         <Card className="mt-4 p-3 shadow-lg">
           <Card.Body>
@@ -119,23 +214,11 @@ const TakeExam = () => {
             <div className="text-center mt-3">
               <h5>Live Camera Feed</h5>
               <img
-                src="http://127.0.0.1:5000/video_feed"
+                src="http://127.0.0.1:5000/api/video_feed"
                 alt="Webcam Stream"
                 width="640"
                 height="480"
               />
-            </div>
-
-            {/* Cheating Detection Result */}
-            <div className="text-center mt-3">
-              <Button variant="warning" onClick={captureFrame}>
-                Check for Suspicious Behavior
-              </Button>
-              {classification && (
-                <p className="mt-2">
-                  <strong>Classification: </strong> {classification}
-                </p>
-              )}
             </div>
 
             <div className="d-flex justify-content-between mt-4">
@@ -152,6 +235,35 @@ const TakeExam = () => {
           </Card.Body>
         </Card>
       )}
+
+      {/* Results Modal */}
+      <Modal
+        show={showResults}
+        onHide={() => setShowResults(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>📊 Exam Behavior Analysis</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Row>
+            {capturedImages.map((img, index) => (
+              <Col key={index} md={4} className="text-center">
+                <img
+                  src={img.image}
+                  alt={`Captured ${index}`}
+                  width="100%"
+                  className="mb-2"
+                />
+                <p>
+                  <strong>{results[index]}</strong>
+                </p>
+              </Col>
+            ))}
+          </Row>
+        </Modal.Body>
+      </Modal>
     </Container>
   );
 };

@@ -23,8 +23,7 @@ const TakeExam = () => {
   const [warningMessage, setWarningMessage] = useState("");
   const [showWarning, setShowWarning] = useState(false);
   const [capturedImages, setCapturedImages] = useState([]); // Store captured images
-  const [results, setResults] = useState([]); // Store classification results
-  const [showResults, setShowResults] = useState(false); // Control results modal visibility
+  const [showCapturedModal, setShowCapturedModal] = useState(false); // Controls captured images modal
 
   // Select Exam
   const handleExamSelect = (e) => {
@@ -41,8 +40,6 @@ const TakeExam = () => {
     setIsTakingExam(true);
     setTimer(selectedExam.duration * 60);
     setCapturedImages([]); // Clear previous exam images
-    setResults([]); // Clear previous exam results
-    setShowResults(false); // Hide results modal
   };
 
   // Timer Countdown
@@ -61,31 +58,20 @@ const TakeExam = () => {
           const response = await axios.get(
             "http://127.0.0.1:5000/api/detect_warning"
           );
-          console.log("📡 Full API Response:", response.data); // ✅ Log entire response
+          console.log("📡 Full API Response:", response.data);
 
           if (response.data.warning !== "Looking Forward") {
-            console.log(`⚠️ Warning detected: ${response.data.warning}`); // ✅ Log warnings
+            console.log(`⚠️ Warning detected: ${response.data.warning}`);
             setWarningMessage(response.data.warning);
             setShowWarning(true);
 
-            // Log whether an image should be captured
-            console.log("🟢 Capture Flag:", response.data.capture);
-            console.log(
-              "📸 Base64 Frame Exists?:",
-              response.data.frame ? "Yes" : "No"
-            );
-
-            // Capture image if necessary
             if (response.data.capture && response.data.frame) {
               const imageUrl = `data:image/jpeg;base64,${response.data.frame}`;
-              console.log(
-                "📸 Capturing Image:",
-                imageUrl.substring(0, 50) + "..."
-              ); // ✅ Log a snippet
+              console.log("📸 Capturing Image:", imageUrl.substring(0, 50) + "...");
 
               setCapturedImages((prevImages) => [
+                { image: imageUrl, label: "Non Cheating" }, // Default label as "Non Cheating"
                 ...prevImages,
-                { image: imageUrl, label: response.data.warning },
               ]);
             }
           }
@@ -98,44 +84,16 @@ const TakeExam = () => {
     }
   }, [isTakingExam]);
 
-  // Submit Exam & Check Behavior
+  // Submit Exam
   const handleSubmitExam = async () => {
     try {
       await axios.post("http://127.0.0.1:5000/api/stop_camera");
-      alert("Exam Submitted! Checking behavior...");
-      //await checkBehavior();
+      alert("Exam Submitted! Opening captured images...");
+      setShowCapturedModal(true); // Open captured images modal
     } catch (error) {
       console.error("Error stopping camera:", error);
     }
     setIsTakingExam(false);
-  };
-
-  // Send all captured images for classification after the exam
-  const checkBehavior = async () => {
-    try {
-      const formData = new FormData();
-
-      for (let i = 0; i < capturedImages.length; i++) {
-        const blob = await fetch(capturedImages[i].image).then((res) =>
-          res.blob()
-        );
-
-        formData.append(
-          "files",
-          new File([blob], `image_${i}.jpg`, { type: "image/jpeg" })
-        );
-      }
-      const response = await axios.post(
-        "http://127.0.0.1:5000/api/classify_multiple",
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
-
-      setResults(response.data.results);
-      setShowResults(true);
-    } catch (error) {
-      console.error("Error classifying images:", error);
-    }
   };
 
   return (
@@ -158,14 +116,11 @@ const TakeExam = () => {
       </Modal>
 
       {/* Exam Selection */}
-      {!isTakingExam && results.length === 0 && (
+      {!isTakingExam && (
         <>
           <Form.Group className="mb-3">
             <Form.Label>Select Exam</Form.Label>
-            <Form.Select
-              onChange={handleExamSelect}
-              value={selectedExam ? selectedExam.id : ""}
-            >
+            <Form.Select onChange={handleExamSelect} value={selectedExam ? selectedExam.id : ""}>
               <option value="">-- Select an Exam --</option>
               {exams.map((exam) => (
                 <option key={exam.id} value={exam.id}>
@@ -175,11 +130,7 @@ const TakeExam = () => {
             </Form.Select>
           </Form.Group>
 
-          <Button
-            variant="success"
-            onClick={handleStartExam}
-            disabled={!selectedExam}
-          >
+          <Button variant="success" onClick={handleStartExam} disabled={!selectedExam}>
             Start Exam
           </Button>
         </>
@@ -215,10 +166,7 @@ const TakeExam = () => {
             </div>
 
             <div className="d-flex justify-content-between mt-4">
-              <Button
-                variant="secondary"
-                onClick={() => setIsTakingExam(false)}
-              >
+              <Button variant="secondary" onClick={() => setIsTakingExam(false)}>
                 Cancel Exam
               </Button>
               <Button variant="primary" onClick={handleSubmitExam}>
@@ -228,54 +176,34 @@ const TakeExam = () => {
           </Card.Body>
         </Card>
       )}
-      {/* Display Captured Images Immediately */}
-      {capturedImages.length > 0 && (
-        <div className="mt-4">
-          <h5>📸 Captured Images (Debug View)</h5>
-          <Row>
-            {capturedImages.map((img, index) => (
-              <Col key={index} md={4} className="text-center">
-                <img
-                  src={img.image}
-                  alt={`Captured ${index}`}
-                  width="100%"
-                  className="mb-2 rounded border shadow"
-                />
-                <p>
-                  <strong>{img.label}</strong>
-                </p>
-              </Col>
-            ))}
-          </Row>
-        </div>
-      )}
-      {/* Results Modal */}
-      <Modal
-        show={showResults}
-        onHide={() => setShowResults(false)}
-        size="lg"
-        centered
-      >
+
+      {/* Captured Images Modal */}
+      <Modal show={showCapturedModal} onHide={() => setShowCapturedModal(false)} size="lg" centered>
         <Modal.Header closeButton>
-          <Modal.Title>📊 Exam Behavior Analysis</Modal.Title>
+          <Modal.Title>📸 Captured Images</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <Row>
-            {capturedImages.map((img, index) => (
-              <Col key={index} md={4} className="text-center">
-                <img
-                  src={img.image}
-                  alt={`Captured ${index}`}
-                  width="100%"
-                  className="mb-2"
-                />
-                <p>
-                  <strong>{results[index]}</strong>
-                </p>
-              </Col>
-            ))}
-          </Row>
+          {capturedImages.length > 0 ? (
+            <Row>
+              {capturedImages.map((img, index) => (
+                <Col key={index} md={4} className="text-center">
+                  <img
+                    src={img.image}
+                    alt={`Captured ${index}`}
+                    width="100%"
+                    className="mb-2 rounded border shadow"
+                  />
+                  <p><strong>{img.label}</strong></p>
+                </Col>
+              ))}
+            </Row>
+          ) : (
+            <p className="text-center">No images captured.</p>
+          )}
         </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowCapturedModal(false)}>Close</Button>
+        </Modal.Footer>
       </Modal>
     </Container>
   );

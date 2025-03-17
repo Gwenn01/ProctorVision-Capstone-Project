@@ -25,7 +25,6 @@ def classify_multiple():
     if model is None:
         return jsonify({"error": "Model not loaded. Check file path."}), 500
 
-    # ✅ Ensure that files are included in the request
     if 'files' not in request.files or len(request.files.getlist('files')) == 0:
         return jsonify({"error": "No files uploaded"}), 400
 

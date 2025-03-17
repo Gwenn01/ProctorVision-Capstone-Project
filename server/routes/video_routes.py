@@ -2,6 +2,7 @@ from flask import Blueprint, Response, jsonify
 import cv2
 import mediapipe as mp
 import time
+import base64
 
 video_bp = Blueprint('video', __name__)
 
@@ -27,7 +28,7 @@ def detect_suspicious_behavior(frame):
     results = face_mesh.process(rgb_frame)
 
     warning_message = "Looking Forward"
-    should_capture = False
+    should_capture = False  # Default: No capture
 
     if results.multi_face_landmarks:
         for face_landmarks in results.multi_face_landmarks:
@@ -39,23 +40,37 @@ def detect_suspicious_behavior(frame):
             left_x = int(left_eye.x * w)
             right_x = int(right_eye.x * w)
 
-            current_time = time.time()
-
-            if nose_y < (h // 2) - LOOK_UP_THRESHOLD:
+            # Detect suspicious behavior
+            if nose_y < (h // 2) - 100:
                 warning_message = "Looking Up"
-            elif nose_y > (h // 2) + LOOK_DOWN_THRESHOLD:
+            elif nose_y > (h // 2) + 100:
                 warning_message = "Looking Down"
-            elif left_x > (w // 2) + LOOK_LEFT_THRESHOLD:
+            elif left_x > (w // 2) + 110:
                 warning_message = "Looking Left"
-            elif right_x < (w // 2) - LOOK_RIGHT_THRESHOLD:
+            elif right_x < (w // 2) - 110:
                 warning_message = "Looking Right"
 
-            # Capture only if enough time has passed
-            if warning_message != "Looking Forward" and (current_time - last_capture_time) > capture_interval:
-                last_capture_time = current_time
+            if warning_message != "Looking Forward":
                 should_capture = True
 
     return warning_message, should_capture
+
+@video_bp.route('/detect_warning')
+def detect_warning():
+    """Detects head movement and returns warning message with captured frame."""
+    success, frame = cap.read()
+    if not success:
+        return jsonify({"error": "Failed to capture frame"}), 500
+
+    warning_message, should_capture = detect_suspicious_behavior(frame)
+
+    encoded_frame = None
+    if should_capture:
+        _, buffer = cv2.imencode('.jpg', frame)
+        encoded_frame = base64.b64encode(buffer).decode('utf-8')
+
+    return jsonify({"warning": warning_message, "capture": should_capture, "frame": encoded_frame})
+
 
 @video_bp.route('/video_feed')
 def video_feed():
@@ -66,7 +81,7 @@ def video_feed():
             if not success:
                 break
 
-            direction_text, should_capture = detect_suspicious_behavior(frame)
+            direction_text, _ = detect_suspicious_behavior(frame)
             cv2.putText(frame, direction_text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
             _, buffer = cv2.imencode('.jpg', frame)
@@ -77,19 +92,6 @@ def video_feed():
 
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@video_bp.route('/detect_warning')
-def detect_warning():
-    """Detects head movement and returns warning message with capture flag."""
-    if not cap.isOpened():
-        return jsonify({"error": "Camera not available"}), 500
-
-    success, frame = cap.read()
-    if not success or frame is None:
-        return jsonify({"error": "Failed to capture frame"}), 500
-
-    warning_message, should_capture = detect_suspicious_behavior(frame)
-    return jsonify({"warning": warning_message, "capture": should_capture})
-
 @video_bp.route('/stop_camera', methods=['POST'])
 def stop_camera():
     """Stops the webcam stream."""
@@ -98,12 +100,3 @@ def stop_camera():
         cap.release()
         return jsonify({"message": "Camera stopped successfully"}), 200
     return jsonify({"error": "Camera is already stopped"}), 400
-
-# Properly close camera when Flask shuts down
-@video_bp.route('/shutdown', methods=['POST'])
-def shutdown():
-    """Gracefully shutdown Flask and release camera."""
-    global cap
-    if cap.isOpened():
-        cap.release()
-    return jsonify({"message": "Server shutting down"}), 200

@@ -22,50 +22,9 @@ const TakeExam = () => {
   const [isTakingExam, setIsTakingExam] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
   const [showWarning, setShowWarning] = useState(false);
-  const [lastCapture, setLastCapture] = useState("");
   const [capturedImages, setCapturedImages] = useState([]); // Store captured images
   const [results, setResults] = useState([]); // Store classification results
   const [showResults, setShowResults] = useState(false); // Control results modal visibility
-
-  // Timer Countdown
-  useEffect(() => {
-    if (isTakingExam && timer > 0) {
-      const countdown = setInterval(() => setTimer((prev) => prev - 1), 1000);
-      return () => clearInterval(countdown);
-    }
-  }, [isTakingExam, timer]);
-
-  // Check for suspicious behavior and capture images
-  useEffect(() => {
-    if (isTakingExam) {
-      const interval = setInterval(async () => {
-        try {
-          const response = await axios.get(
-            "http://127.0.0.1:5000/api/detect_warning"
-          );
-          console.log("Warning Response:", response.data); // Debugging Log
-
-          if (response.data.warning !== "Looking Forward") {
-            setWarningMessage(response.data.warning);
-            setShowWarning(true);
-
-            // Capture image for each unique warning
-            if (
-              response.data.capture &&
-              lastCapture !== response.data.warning
-            ) {
-              setLastCapture(response.data.warning);
-              captureFrame(response.data.warning);
-            }
-          }
-        } catch (error) {
-          console.error("Error detecting warning:", error);
-        }
-      }, 3000); // Check every 3 seconds
-
-      return () => clearInterval(interval);
-    }
-  }, [isTakingExam, lastCapture]);
 
   // Select Exam
   const handleExamSelect = (e) => {
@@ -86,32 +45,69 @@ const TakeExam = () => {
     setShowResults(false); // Hide results modal
   };
 
+  // Timer Countdown
+  useEffect(() => {
+    if (isTakingExam && timer > 0) {
+      const countdown = setInterval(() => setTimer((prev) => prev - 1), 1000);
+      return () => clearInterval(countdown);
+    }
+  }, [isTakingExam, timer]);
+
+  // Check for suspicious behavior and capture images
+  useEffect(() => {
+    if (isTakingExam) {
+      const interval = setInterval(async () => {
+        try {
+          const response = await axios.get(
+            "http://127.0.0.1:5000/api/detect_warning"
+          );
+          console.log("📡 Full API Response:", response.data); // ✅ Log entire response
+
+          if (response.data.warning !== "Looking Forward") {
+            console.log(`⚠️ Warning detected: ${response.data.warning}`); // ✅ Log warnings
+            setWarningMessage(response.data.warning);
+            setShowWarning(true);
+
+            // Log whether an image should be captured
+            console.log("🟢 Capture Flag:", response.data.capture);
+            console.log(
+              "📸 Base64 Frame Exists?:",
+              response.data.frame ? "Yes" : "No"
+            );
+
+            // Capture image if necessary
+            if (response.data.capture && response.data.frame) {
+              const imageUrl = `data:image/jpeg;base64,${response.data.frame}`;
+              console.log(
+                "📸 Capturing Image:",
+                imageUrl.substring(0, 50) + "..."
+              ); // ✅ Log a snippet
+
+              setCapturedImages((prevImages) => [
+                ...prevImages,
+                { image: imageUrl, label: response.data.warning },
+              ]);
+            }
+          }
+        } catch (error) {
+          console.error("Error detecting warning:", error);
+        }
+      }, 3000);
+
+      return () => clearInterval(interval);
+    }
+  }, [isTakingExam]);
+
+  // Submit Exam & Check Behavior
   const handleSubmitExam = async () => {
     try {
       await axios.post("http://127.0.0.1:5000/api/stop_camera");
       alert("Exam Submitted! Checking behavior...");
-      await checkBehavior(); // ✅ Process images
+      //await checkBehavior();
     } catch (error) {
       console.error("Error stopping camera:", error);
     }
     setIsTakingExam(false);
-  };
-
-  // Capture Frame & Store Image Locally
-  const captureFrame = async (warningLabel) => {
-    try {
-      const response = await fetch("http://127.0.0.1:5000/api/video_feed");
-      const blob = await response.blob();
-      const imageUrl = URL.createObjectURL(blob);
-
-      // Store captured image along with the label
-      setCapturedImages((prevImages) => [
-        ...prevImages,
-        { image: imageUrl, label: warningLabel },
-      ]);
-    } catch (error) {
-      console.error("Error capturing frame:", error);
-    }
   };
 
   // Send all captured images for classification after the exam
@@ -129,17 +125,14 @@ const TakeExam = () => {
           new File([blob], `image_${i}.jpg`, { type: "image/jpeg" })
         );
       }
-
-      // Send the request
       const response = await axios.post(
         "http://127.0.0.1:5000/api/classify_multiple",
         formData,
-        { headers: { "Content-Type": "multipart/form-data" } } // ✅ Important!
+        { headers: { "Content-Type": "multipart/form-data" } }
       );
 
-      // ✅ Store results and show the results modal
       setResults(response.data.results);
-      setShowResults(true); // Ensure modal shows up
+      setShowResults(true);
     } catch (error) {
       console.error("Error classifying images:", error);
     }
@@ -216,8 +209,8 @@ const TakeExam = () => {
               <img
                 src="http://127.0.0.1:5000/api/video_feed"
                 alt="Webcam Stream"
-                width="640"
-                height="480"
+                width="440"
+                height="280"
               />
             </div>
 
@@ -235,7 +228,27 @@ const TakeExam = () => {
           </Card.Body>
         </Card>
       )}
-
+      {/* Display Captured Images Immediately */}
+      {capturedImages.length > 0 && (
+        <div className="mt-4">
+          <h5>📸 Captured Images (Debug View)</h5>
+          <Row>
+            {capturedImages.map((img, index) => (
+              <Col key={index} md={4} className="text-center">
+                <img
+                  src={img.image}
+                  alt={`Captured ${index}`}
+                  width="100%"
+                  className="mb-2 rounded border shadow"
+                />
+                <p>
+                  <strong>{img.label}</strong>
+                </p>
+              </Col>
+            ))}
+          </Row>
+        </div>
+      )}
       {/* Results Modal */}
       <Modal
         show={showResults}

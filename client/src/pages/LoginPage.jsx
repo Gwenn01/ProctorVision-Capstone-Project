@@ -5,7 +5,7 @@ import { FaUser, FaLock } from "react-icons/fa"; // Import icons
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Spinner from "../components/Spinner";
-import logo from "../assets/logo.png";
+import logo from "../assets/prmsu-logo.png";
 import "../styles/loginpage.css"; // Ensure you have CSS file for custom styling
 
 const LoginPage = () => {

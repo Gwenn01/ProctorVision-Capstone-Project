@@ -9,6 +9,9 @@ import {
   FaIdBadge,
   FaHashtag,
 } from "react-icons/fa";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import Spinner from "../../components/Spinner"; // Make sure this Spinner component exists
 
 const CreateAccount = () => {
   const [userType, setUserType] = useState(null);
@@ -19,30 +22,50 @@ const CreateAccount = () => {
     email: "",
     password: "",
   });
+  const [loading, setLoading] = useState(false);
 
-  // Handle Input Changes
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Handle Form Submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Creating Account:", userType, formData);
-    alert(
-      `New ${userType} Account Created!\nUsername: ${formData.username}\nID: ${formData.id}`
-    );
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://localhost:5000/api/create_account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...formData, userType }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success(result.message);
+        setUserType(null);
+      } else {
+        toast.error(result.error || "Failed to create account.");
+      }
+    } catch (err) {
+      console.error("Error:", err);
+      toast.error("Server error: Failed to connect.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <Container className="d-flex flex-column align-items-center justify-content-center mt-4">
+      <ToastContainer />
       <Card className="shadow-lg border-0 p-4" style={{ width: "30rem" }}>
         <Card.Body>
           <Card.Title className="text-center mb-3 fw-bold fs-4">
             Create Account
           </Card.Title>
 
-          {/* Step 1: Select Account Type */}
           {!userType ? (
             <>
               <p className="text-center">
@@ -65,8 +88,12 @@ const CreateAccount = () => {
                 </Button>
               </div>
             </>
+          ) : loading ? (
+            <div className="text-center mt-3">
+              <Spinner /> {/* Reuse your Spinner component */}
+              <p className="mt-2">Creating account...</p>
+            </div>
           ) : (
-            /* Step 2: Show the Form */
             <Form onSubmit={handleSubmit}>
               <p className="text-center">
                 Creating a <strong>{userType}</strong> account

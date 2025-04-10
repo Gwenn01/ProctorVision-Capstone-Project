@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Container, Button, Form, Card } from "react-bootstrap";
-import { FaUser, FaLock } from "react-icons/fa"; // Import icons
+import { FaUser, FaLock } from "react-icons/fa";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Spinner from "../components/Spinner";
 import logo from "../assets/prmsu-logo.png";
-import "../styles/loginpage.css"; // Ensure you have CSS file for custom styling
+import "../styles/loginpage.css";
 
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
@@ -14,7 +14,6 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  // Handle Login
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!username || !password) {
@@ -30,20 +29,19 @@ const LoginPage = () => {
         body: JSON.stringify({ username, password }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(
-          response.status === 401
-            ? "Invalid username or password"
-            : "Server error"
-        );
+        throw new Error(data.error || "Login failed");
       }
 
-      const data = await response.json();
-      toast.success("Login successful!");
+      toast.success(data.message || "Login successful!");
+
       localStorage.setItem("token", data.token);
       localStorage.setItem("isAuthenticated", "true");
       localStorage.setItem("userData", JSON.stringify(data));
 
+      // Navigate based on role
       setTimeout(() => {
         navigate("/dashboard");
       }, 1000);
@@ -57,8 +55,6 @@ const LoginPage = () => {
   return (
     <Container className="d-flex flex-column align-items-center justify-content-center vh-100 login-container">
       <ToastContainer autoClose={3000} position="top-right" />
-
-      {/* Login Form */}
       <Card className="shadow-lg border-0 p-4 login-card">
         <Card.Body>
           <div className="text-center mb-3">

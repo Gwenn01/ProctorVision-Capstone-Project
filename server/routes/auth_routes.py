@@ -1,14 +1,10 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token
+from database.connection import get_db_connection
+from datetime import timedelta
+import bcrypt
 
 auth_bp = Blueprint('auth', __name__)
-
-# Sample user data (Replace with a database in production)
-users = {
-    "Admin": {"username": "admin", "password": "admin123", "role": "Admin"},
-    "Instructor": {"username": "instructor", "password": "instructor123", "role": "Instructor"},
-    "Student": {"username": "student", "password": "student123", "role": "Student"}
-}
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
@@ -23,11 +19,55 @@ def login():
         if not username or not password:
             return jsonify({"error": "Username and password are required"}), 400
 
-        for user_key, user_info in users.items():
-            if username == user_info["username"] and password == user_info["password"]:
-                access_token = create_access_token(identity=username)
-                return jsonify({"username": username, "role": user_info["role"], "token": access_token}), 200
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # === Check Admin Table ===
+        cursor.execute("SELECT * FROM admin WHERE username = %s", (username,))
+        admin = cursor.fetchone()
+        if admin:
+            stored_hash = str(admin['password']).strip()
+            if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+                token = create_access_token(
+                    identity=admin['username'],
+                    expires_delta=timedelta(days=1)
+                )
+                return jsonify({
+                    "message": "Login successful",
+                    "username": admin['username'],
+                    "name": admin['name'],
+                    "role": "Admin",
+                    "token": token
+                }), 200
+            else:
+                return jsonify({"error": "Invalid username or password"}), 401
+
+        # === Check Users Table (Instructor / Student) ===
+        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        if user:
+            stored_hash = str(user['password']).strip()
+            if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+                token = create_access_token(
+                    identity=user['username'],
+                    expires_delta=timedelta(days=1)
+                )
+                return jsonify({
+                    "message": "Login successful",
+                    "username": user['username'],
+                    "name": user['name'],
+                    "role": user['user_type'],  # "Instructor" or "Student"
+                    "token": token
+                }), 200
+            else:
+                return jsonify({"error": "Invalid username or password"}), 401
 
         return jsonify({"error": "Invalid username or password"}), 401
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("Login error:", str(e))
+        return jsonify({"error": "Server error. Please try again."}), 500
+
+    finally:
+        if 'conn' in locals():
+            conn.close()

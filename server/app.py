@@ -24,7 +24,7 @@ def test_connection():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Import and register routes
+# Register route blueprints
 from routes.create_account_routes import create_account_bp
 from routes.auth_routes import auth_bp
 from routes.video_routes import video_bp

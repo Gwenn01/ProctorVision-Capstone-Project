@@ -1,71 +1,60 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Container, Table, Button, Form, Modal } from "react-bootstrap";
+import axios from "axios";
 
 const ManageAccount = () => {
-  // Sample user data (Replace this with backend data)
-  const initialUsers = [
-    {
-      id: 1,
-      role: "Student",
-      name: "John Doe",
-      username: "johndoe",
-      email: "johndoe@example.com",
-    },
-    {
-      id: 2,
-      role: "Instructor",
-      name: "Jane Smith",
-      username: "janesmith",
-      email: "janesmith@example.com",
-    },
-    {
-      id: 3,
-      role: "Student",
-      name: "Alice Johnson",
-      username: "alicej",
-      email: "alicej@example.com",
-    },
-    {
-      id: 4,
-      role: "Instructor",
-      name: "Bob Brown",
-      username: "bobb",
-      email: "bobb@example.com",
-    },
-  ];
-
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState([]);
   const [filterRole, setFilterRole] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
-  // Handle dropdown change
+  // Fetch users on load
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/users");
+      setUsers(res.data);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+    }
+  };
+
   const handleFilterChange = (e) => {
     setFilterRole(e.target.value);
   };
 
-  // Open Edit Modal
   const handleEdit = (user) => {
-    setSelectedUser(user);
+    setSelectedUser({ ...user });
     setShowModal(true);
   };
 
-  // Handle Save Changes in Modal
-  const handleSaveChanges = () => {
-    setUsers(
-      users.map((user) => (user.id === selectedUser.id ? selectedUser : user))
-    );
-    setShowModal(false);
-  };
-
-  // Handle Delete User
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to delete this user?")) {
-      setUsers(users.filter((user) => user.id !== id));
+  const handleSaveChanges = async () => {
+    try {
+      await axios.put(
+        `http://localhost:5000/api/users/${selectedUser.id}`,
+        selectedUser
+      );
+      fetchUsers(); // Refresh list
+      setShowModal(false);
+    } catch (err) {
+      console.error("Update failed:", err);
     }
   };
 
-  // Filter Users Based on Dropdown Selection
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to delete this user?")) {
+      try {
+        await axios.delete(`http://localhost:5000/api/users/${id}`);
+        fetchUsers();
+      } catch (err) {
+        console.error("Delete failed:", err);
+      }
+    }
+  };
+
   const filteredUsers =
     filterRole === "All"
       ? users
@@ -75,7 +64,6 @@ const ManageAccount = () => {
     <Container>
       <h2 className="mb-4">Manage Account</h2>
 
-      {/* Dropdown for filtering */}
       <Form.Group className="mb-3">
         <Form.Label>Filter by Role:</Form.Label>
         <Form.Select value={filterRole} onChange={handleFilterChange}>
@@ -85,7 +73,6 @@ const ManageAccount = () => {
         </Form.Select>
       </Form.Group>
 
-      {/* Table for Users */}
       <Table striped bordered hover>
         <thead className="table-dark">
           <tr>
@@ -135,7 +122,7 @@ const ManageAccount = () => {
         </tbody>
       </Table>
 
-      {/* Edit User Modal */}
+      {/* Edit Modal */}
       <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>Edit User</Modal.Title>

@@ -34,9 +34,7 @@ const LoginPage = () => {
       if (!response.ok) {
         throw new Error(data.error || "Login failed");
       }
-
       toast.success(data.message || "Login successful!");
-
       localStorage.setItem("token", data.token);
       localStorage.setItem("isAuthenticated", "true");
       localStorage.setItem("userData", JSON.stringify(data));

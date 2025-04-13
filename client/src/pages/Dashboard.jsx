@@ -15,16 +15,9 @@ import TakeExam from "./StudentDashboard/TakeExam";
 import YourBehavior from "./StudentDashboard/YourBehavior";
 
 const Dashboard = () => {
-  // Get user data from localStorage
-  let storedUserData = localStorage.getItem("userData");
-  let userData;
-  try {
-    userData = storedUserData ? JSON.parse(storedUserData) : {};
-  } catch (error) {
-    console.error("Error parsing userData from localStorage:", error);
-    userData = {};
-  }
-  const role = userData?.role || "Student";
+  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+  const role = userData.role || "Student";
+  const instructorId = userData.id || null;
 
   return (
     <Container fluid>
@@ -44,10 +37,17 @@ const Dashboard = () => {
               )}
               {role === "Instructor" && (
                 <>
-                  <Route path="/" element={<ManageStudentEnroll />} />
+                  <Route
+                    path="/"
+                    element={
+                      <ManageStudentEnroll instructorId={instructorId} />
+                    }
+                  />
                   <Route
                     path="manage-student"
-                    element={<ManageStudentEnroll />}
+                    element={
+                      <ManageStudentEnroll instructorId={instructorId} />
+                    }
                   />
                   <Route path="create-exam" element={<CreateExam />} />
                   <Route path="manage-exam" element={<ManageExam />} />

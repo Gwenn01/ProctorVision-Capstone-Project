@@ -1,33 +1,39 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Container, Table, Button, Modal } from "react-bootstrap";
+import axios from "axios";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const ManageExam = () => {
-  const initialExams = [
-    {
-      id: 1,
-      title: "Math Quiz",
-      description: "Basic algebra questions",
-      duration: "30 minutes",
-    },
-    {
-      id: 2,
-      title: "Science Test",
-      description: "General science knowledge",
-      duration: "45 minutes",
-    },
-  ];
-
-  const [exams, setExams] = useState(initialExams);
+  const [exams, setExams] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedExam, setSelectedExam] = useState(null);
+  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+  const instructorId = userData.id;
 
-  const handleStartExam = (exam) => {
+  const fetchExams = async () => {
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/api/exams/${instructorId}`
+      );
+      setExams(res.data);
+    } catch (err) {
+      console.error("Failed to fetch exams", err);
+    }
+  };
+
+  useEffect(() => {
+    if (instructorId) fetchExams();
+  }, [instructorId]);
+
+  const handleViewExam = (exam) => {
     setSelectedExam(exam);
     setShowModal(true);
   };
 
   return (
     <Container className="mt-4">
+      <ToastContainer autoClose={3000} />
       <h2 className="mb-4">Manage Exams</h2>
 
       <Table striped bordered hover>
@@ -47,14 +53,14 @@ const ManageExam = () => {
                 <td>{exam.id}</td>
                 <td>{exam.title}</td>
                 <td>{exam.description}</td>
-                <td>{exam.duration}</td>
+                <td>{exam.duration_minutes} minutes</td>
                 <td>
                   <Button
-                    variant="success"
+                    variant="info"
                     size="sm"
-                    onClick={() => handleStartExam(exam)}
+                    onClick={() => handleViewExam(exam)}
                   >
-                    Start Exam
+                    View
                   </Button>
                 </td>
               </tr>
@@ -62,7 +68,7 @@ const ManageExam = () => {
           ) : (
             <tr>
               <td colSpan="5" className="text-center">
-                No exams found
+                No exams found.
               </td>
             </tr>
           )}
@@ -79,7 +85,7 @@ const ManageExam = () => {
               <strong>Description:</strong> {selectedExam.description}
             </p>
             <p>
-              <strong>Duration:</strong> {selectedExam.duration}
+              <strong>Duration:</strong> {selectedExam.time} minutes
             </p>
           </Modal.Body>
           <Modal.Footer>

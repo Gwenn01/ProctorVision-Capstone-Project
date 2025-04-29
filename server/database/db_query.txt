@@ -27,3 +27,25 @@ VALUES
 
 SELECT * FROM admin;
 SELECT * FROM users;
+
+USE proctorvision_db;
+
+SELECT * FROM admin;
+SELECT * FROM users;
+SELECT * FROM exams;
+SELECT * FROM exam_students;
+SELECT * FROM instructor_assignment;
+
+CREATE TABLE suspicious_behavior_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  exam_id INT NOT NULL,
+  image_base64 LONGTEXT,
+  warning_type VARCHAR(255),
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
+);
+
+

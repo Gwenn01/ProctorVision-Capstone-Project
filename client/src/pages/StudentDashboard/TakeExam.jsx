@@ -12,18 +12,35 @@ import {
 import axios from "axios";
 
 const TakeExam = () => {
-  const exams = [
-    { id: 1, title: "Math Exam", duration: 10 },
-    { id: 2, title: "Science Test", duration: 15 },
-  ];
-
+  const [exams, setExams] = useState([]);
   const [selectedExam, setSelectedExam] = useState(null);
   const [timer, setTimer] = useState(0);
   const [isTakingExam, setIsTakingExam] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
   const [showWarning, setShowWarning] = useState(false);
-  const [capturedImages, setCapturedImages] = useState([]); // Store captured images
-  const [showCapturedModal, setShowCapturedModal] = useState(false); // Controls captured images modal
+  const [capturedImages, setCapturedImages] = useState([]);
+  const [showCapturedModal, setShowCapturedModal] = useState(false);
+
+  // Fetch exams from backend
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const studentId = userData?.id;
+
+    const fetchExams = async () => {
+      try {
+        const response = await axios.get(
+          `http://127.0.0.1:5000/api/get_exam?student_id=${studentId}`
+        );
+        setExams(response.data);
+      } catch (error) {
+        console.error("Error fetching exams:", error);
+      }
+    };
+
+    if (studentId) {
+      fetchExams();
+    }
+  }, []);
 
   // Select Exam
   const handleExamSelect = (e) => {
@@ -38,8 +55,8 @@ const TakeExam = () => {
       return;
     }
     setIsTakingExam(true);
-    setTimer(selectedExam.duration * 60);
-    setCapturedImages([]); // Clear previous exam images
+    setTimer(selectedExam.duration_minutes * 60);
+    setCapturedImages([]);
   };
 
   // Timer Countdown
@@ -50,7 +67,7 @@ const TakeExam = () => {
     }
   }, [isTakingExam, timer]);
 
-  // Check for suspicious behavior and capture images
+  // Detect suspicious behavior
   useEffect(() => {
     if (isTakingExam) {
       const interval = setInterval(async () => {
@@ -67,33 +84,56 @@ const TakeExam = () => {
 
             if (response.data.capture && response.data.frame) {
               const imageUrl = `data:image/jpeg;base64,${response.data.frame}`;
-              console.log("📸 Capturing Image:", imageUrl.substring(0, 50) + "...");
+              console.log(
+                "📸 Capturing Image:",
+                imageUrl.substring(0, 50) + "..."
+              );
 
               setCapturedImages((prevImages) => [
-                { image: imageUrl, label: "Non Cheating" }, // Default label as "Non Cheating"
+                { image: imageUrl, label: response.data.warning },
                 ...prevImages,
               ]);
+
+              // Save to database
+              const userData = JSON.parse(localStorage.getItem("userData"));
+              const userId = userData?.id;
+
+              await axios.post("http://127.0.0.1:5000/api/save_behavior_log", {
+                user_id: userId,
+                exam_id: selectedExam.id,
+                image_base64: response.data.frame,
+                warning_type: response.data.warning,
+              });
+
+              console.log("✅ Behavior log saved.");
             }
           }
         } catch (error) {
-          console.error("Error detecting warning:", error);
+          console.error("Error detecting or saving warning:", error);
         }
       }, 3000);
 
       return () => clearInterval(interval);
     }
-  }, [isTakingExam]);
+  }, [isTakingExam, selectedExam]);
 
   // Submit Exam
   const handleSubmitExam = async () => {
     try {
       await axios.post("http://127.0.0.1:5000/api/stop_camera");
       alert("Exam Submitted! Opening captured images...");
-      setShowCapturedModal(true); // Open captured images modal
+      setShowCapturedModal(true);
     } catch (error) {
       console.error("Error stopping camera:", error);
     }
     setIsTakingExam(false);
+  };
+
+  // Format MM:SS
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
   return (
@@ -120,17 +160,24 @@ const TakeExam = () => {
         <>
           <Form.Group className="mb-3">
             <Form.Label>Select Exam</Form.Label>
-            <Form.Select onChange={handleExamSelect} value={selectedExam ? selectedExam.id : ""}>
+            <Form.Select
+              onChange={handleExamSelect}
+              value={selectedExam ? selectedExam.id : ""}
+            >
               <option value="">-- Select an Exam --</option>
               {exams.map((exam) => (
                 <option key={exam.id} value={exam.id}>
-                  {exam.title} ({exam.duration} min)
+                  {exam.title} ({exam.duration_minutes} min)
                 </option>
               ))}
             </Form.Select>
           </Form.Group>
 
-          <Button variant="success" onClick={handleStartExam} disabled={!selectedExam}>
+          <Button
+            variant="success"
+            onClick={handleStartExam}
+            disabled={!selectedExam}
+          >
             Start Exam
           </Button>
         </>
@@ -145,13 +192,12 @@ const TakeExam = () => {
             {/* Timer Progress Bar */}
             <ProgressBar
               animated
-              now={(timer / (selectedExam.duration * 60)) * 100}
+              now={(timer / (selectedExam.duration_minutes * 60)) * 100}
               variant="danger"
               className="my-3"
             />
             <p className="text-center text-danger fw-bold">
-              Time Left: {Math.floor(timer / 60)}:{timer % 60 < 10 ? "0" : ""}
-              {timer % 60}
+              Time Left: {formatTime(timer)}
             </p>
 
             {/* Live Webcam Feed */}
@@ -166,9 +212,6 @@ const TakeExam = () => {
             </div>
 
             <div className="d-flex justify-content-between mt-4">
-              <Button variant="secondary" onClick={() => setIsTakingExam(false)}>
-                Cancel Exam
-              </Button>
               <Button variant="primary" onClick={handleSubmitExam}>
                 Submit Exam
               </Button>
@@ -178,7 +221,12 @@ const TakeExam = () => {
       )}
 
       {/* Captured Images Modal */}
-      <Modal show={showCapturedModal} onHide={() => setShowCapturedModal(false)} size="lg" centered>
+      <Modal
+        show={showCapturedModal}
+        onHide={() => setShowCapturedModal(false)}
+        size="lg"
+        centered
+      >
         <Modal.Header closeButton>
           <Modal.Title>📸 Captured Images</Modal.Title>
         </Modal.Header>
@@ -193,7 +241,9 @@ const TakeExam = () => {
                     width="100%"
                     className="mb-2 rounded border shadow"
                   />
-                  <p><strong>{img.label}</strong></p>
+                  <p>
+                    <strong>{img.label}</strong>
+                  </p>
                 </Col>
               ))}
             </Row>
@@ -201,9 +251,6 @@ const TakeExam = () => {
             <p className="text-center">No images captured.</p>
           )}
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowCapturedModal(false)}>Close</Button>
-        </Modal.Footer>
       </Modal>
     </Container>
   );

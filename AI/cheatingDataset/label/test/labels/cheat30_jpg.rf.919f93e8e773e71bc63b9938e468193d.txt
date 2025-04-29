@@ -1,1 +1,2 @@
-0 0.5140625 0.47109375 0.52421875 0.553125
+client id:
+251367230431-fbpu8q01b86mvjg500p1lmfc9mf5tbab.apps.googleusercontent.com

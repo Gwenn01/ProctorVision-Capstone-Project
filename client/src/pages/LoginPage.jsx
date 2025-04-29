@@ -60,7 +60,7 @@ const LoginPage = () => {
               src={logo}
               alt="PRMSU Logo"
               className="logo"
-              style={{ width: "2rem", height: "2rem" }}
+              style={{ width: "3rem", height: "3rem" }}
             />
             <h2 className="text-title">ProctorVision</h2>
             <p className="text-muted">AI-Powered Exam Behavior Monitoring</p>

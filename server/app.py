@@ -33,6 +33,8 @@ from routes.manage_users_routes import manage_users_bp
 from routes.enrollment_routes import enrollment_bp
 from routes.exam_routes import exam_bp
 from routes.manage_exam_routes import manage_exam_routes
+from routes.get_exam_routes import get_exam_bp
+from routes.behavior_routes import behavior_bp
 
 app.register_blueprint(create_account_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='/api')
@@ -42,6 +44,8 @@ app.register_blueprint(manage_users_bp, url_prefix="/api")
 app.register_blueprint(enrollment_bp, url_prefix="/api")
 app.register_blueprint(exam_bp, url_prefix="/api")
 app.register_blueprint(manage_exam_routes, url_prefix='/api')
+app.register_blueprint(get_exam_bp, url_prefix='/api')
+app.register_blueprint(behavior_bp, url_prefix='/api')
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

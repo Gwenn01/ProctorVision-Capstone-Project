@@ -9,6 +9,8 @@ import {
   Row,
   Col,
 } from "react-bootstrap";
+import { toast } from "react-toastify";
+import Spinner from "../../components/Spinner"; // Adjust path if needed
 import axios from "axios";
 
 const TakeExam = () => {
@@ -16,50 +18,54 @@ const TakeExam = () => {
   const [selectedExam, setSelectedExam] = useState(null);
   const [timer, setTimer] = useState(0);
   const [isTakingExam, setIsTakingExam] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
   const [showWarning, setShowWarning] = useState(false);
-  const [capturedImages, setCapturedImages] = useState([]);
   const [showCapturedModal, setShowCapturedModal] = useState(false);
+  const [classifiedLogs, setClassifiedLogs] = useState([]);
 
-  // Fetch exams from backend
+  // Fetch exams + filter out submitted
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem("userData"));
-    const studentId = userData?.id;
-
     const fetchExams = async () => {
+      const userData = JSON.parse(localStorage.getItem("userData"));
+      const studentId = userData?.id;
+
       try {
-        const response = await axios.get(
+        const examsRes = await axios.get(
           `http://127.0.0.1:5000/api/get_exam?student_id=${studentId}`
         );
-        setExams(response.data);
+        const submissionsRes = await axios.get(
+          `http://127.0.0.1:5000/api/get_exam_submissions?user_id=${studentId}`
+        );
+
+        const submittedIds = submissionsRes.data.map((s) => s.exam_id);
+        const availableExams = examsRes.data.filter(
+          (exam) => !submittedIds.includes(exam.id)
+        );
+
+        setExams(availableExams);
       } catch (error) {
-        console.error("Error fetching exams:", error);
+        console.error("Error fetching exams/submissions:", error);
       }
     };
 
-    if (studentId) {
-      fetchExams();
-    }
+    fetchExams();
   }, []);
 
-  // Select Exam
   const handleExamSelect = (e) => {
     const exam = exams.find((exam) => exam.id === parseInt(e.target.value));
     setSelectedExam(exam);
   };
 
-  // Start Exam
   const handleStartExam = () => {
     if (!selectedExam) {
-      alert("Please select an exam first!");
+      toast.warn("Please select an exam first!");
       return;
     }
     setIsTakingExam(true);
     setTimer(selectedExam.duration_minutes * 60);
-    setCapturedImages([]);
   };
 
-  // Timer Countdown
   useEffect(() => {
     if (isTakingExam && timer > 0) {
       const countdown = setInterval(() => setTimer((prev) => prev - 1), 1000);
@@ -67,7 +73,6 @@ const TakeExam = () => {
     }
   }, [isTakingExam, timer]);
 
-  // Detect suspicious behavior
   useEffect(() => {
     if (isTakingExam) {
       const interval = setInterval(async () => {
@@ -75,26 +80,12 @@ const TakeExam = () => {
           const response = await axios.get(
             "http://127.0.0.1:5000/api/detect_warning"
           );
-          console.log("Full API Response:", response.data);
 
           if (response.data.warning !== "Looking Forward") {
-            console.log(`⚠️ Warning detected: ${response.data.warning}`);
             setWarningMessage(response.data.warning);
             setShowWarning(true);
 
             if (response.data.capture && response.data.frame) {
-              const imageUrl = `data:image/jpeg;base64,${response.data.frame}`;
-              console.log(
-                "📸 Capturing Image:",
-                imageUrl.substring(0, 50) + "..."
-              );
-
-              setCapturedImages((prevImages) => [
-                { image: imageUrl, label: response.data.warning },
-                ...prevImages,
-              ]);
-
-              // Save to database
               const userData = JSON.parse(localStorage.getItem("userData"));
               const userId = userData?.id;
 
@@ -104,12 +95,10 @@ const TakeExam = () => {
                 image_base64: response.data.frame,
                 warning_type: response.data.warning,
               });
-
-              console.log("Behavior log saved.");
             }
           }
         } catch (error) {
-          console.error("Error detecting or saving warning:", error);
+          console.error("Warning detection error:", error);
         }
       }, 3000);
 
@@ -117,19 +106,43 @@ const TakeExam = () => {
     }
   }, [isTakingExam, selectedExam]);
 
-  // Submit Exam
+  const fetchBehaviorLogs = async () => {
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const response = await axios.get(
+      `http://127.0.0.1:5000/api/get_behavior_logs?user_id=${userData.id}`
+    );
+    const logs = response.data.filter((log) => log.exam_id === selectedExam.id);
+    setClassifiedLogs(logs.reverse());
+  };
+
   const handleSubmitExam = async () => {
+    setIsSubmitting(true);
     try {
+      const userData = JSON.parse(localStorage.getItem("userData"));
+
       await axios.post("http://127.0.0.1:5000/api/stop_camera");
-      alert("Exam Submitted! Opening captured images...");
+      await axios.post("http://127.0.0.1:5000/api/classify_behavior_logs", {
+        user_id: userData.id,
+        exam_id: selectedExam.id,
+      });
+
+      await axios.post("http://127.0.0.1:5000/api/submit_exam", {
+        user_id: userData.id,
+        exam_id: selectedExam.id,
+      });
+
+      await fetchBehaviorLogs();
+
+      toast.success("Exam submitted and classified.");
       setShowCapturedModal(true);
     } catch (error) {
-      console.error("Error stopping camera:", error);
+      console.error("Error during submission:", error);
+      toast.error("Something went wrong while submitting the exam.");
     }
+    setIsSubmitting(false);
     setIsTakingExam(false);
   };
 
-  // Format MM:SS
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -140,7 +153,6 @@ const TakeExam = () => {
     <Container className="mt-4">
       <h2 className="mb-4">Take Exam</h2>
 
-      {/* Warning Modal */}
       <Modal show={showWarning} onHide={() => setShowWarning(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>⚠️ Warning</Modal.Title>
@@ -155,7 +167,6 @@ const TakeExam = () => {
         </Modal.Footer>
       </Modal>
 
-      {/* Exam Selection */}
       {!isTakingExam && (
         <>
           <Form.Group className="mb-3">
@@ -165,11 +176,15 @@ const TakeExam = () => {
               value={selectedExam ? selectedExam.id : ""}
             >
               <option value="">-- Select an Exam --</option>
-              {exams.map((exam) => (
-                <option key={exam.id} value={exam.id}>
-                  {exam.title} ({exam.duration_minutes} min)
-                </option>
-              ))}
+              {exams.length === 0 ? (
+                <option disabled>No available exams</option>
+              ) : (
+                exams.map((exam) => (
+                  <option key={exam.id} value={exam.id}>
+                    {exam.title} ({exam.duration_minutes} min)
+                  </option>
+                ))
+              )}
             </Form.Select>
           </Form.Group>
 
@@ -183,13 +198,11 @@ const TakeExam = () => {
         </>
       )}
 
-      {/* Exam in Progress */}
       {isTakingExam && selectedExam && (
         <Card className="mt-4 p-3 shadow-lg">
           <Card.Body>
             <h3 className="text-center">{selectedExam.title}</h3>
 
-            {/* Timer Progress Bar */}
             <ProgressBar
               animated
               now={(timer / (selectedExam.duration_minutes * 60)) * 100}
@@ -200,7 +213,6 @@ const TakeExam = () => {
               Time Left: {formatTime(timer)}
             </p>
 
-            {/* Live Webcam Feed */}
             <div className="text-center mt-3">
               <h5>Live Camera Feed</h5>
               <img
@@ -212,15 +224,20 @@ const TakeExam = () => {
             </div>
 
             <div className="d-flex justify-content-between mt-4">
-              <Button variant="primary" onClick={handleSubmitExam}>
-                Submit Exam
-              </Button>
+              {isSubmitting ? (
+                <div className="w-100 d-flex justify-content-center">
+                  <Spinner />
+                </div>
+              ) : (
+                <Button variant="primary" onClick={handleSubmitExam}>
+                  Submit Exam
+                </Button>
+              )}
             </div>
           </Card.Body>
         </Card>
       )}
 
-      {/* Captured Images Modal */}
       <Modal
         show={showCapturedModal}
         onHide={() => setShowCapturedModal(false)}
@@ -231,24 +248,34 @@ const TakeExam = () => {
           <Modal.Title>📸 Captured Images</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {capturedImages.length > 0 ? (
+          {classifiedLogs.length > 0 ? (
             <Row>
-              {capturedImages.map((img, index) => (
+              {classifiedLogs.map((log, index) => (
                 <Col key={index} md={4} className="text-center">
                   <img
-                    src={img.image}
+                    src={`data:image/jpeg;base64,${log.image_base64}`}
                     alt={`Captured ${index}`}
                     width="100%"
                     className="mb-2 rounded border shadow"
                   />
-                  <p>
-                    <strong>{img.label}</strong>
+                  <p className="mb-1">
+                    <strong>Warning:</strong> {log.warning_type}
+                  </p>
+                  <p
+                    className={`fw-bold ${
+                      log.classification_label === "Cheating"
+                        ? "text-danger"
+                        : "text-success"
+                    }`}
+                  >
+                    <strong>Result:</strong>{" "}
+                    {log.classification_label || "Not yet classified"}
                   </p>
                 </Col>
               ))}
             </Row>
           ) : (
-            <p className="text-center">No images captured.</p>
+            <p className="text-center">No behavior logs found.</p>
           )}
         </Modal.Body>
       </Modal>

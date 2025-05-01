@@ -22,6 +22,7 @@ def get_behavior_logs():
                 sbl.timestamp,
                 sbl.warning_type,
                 sbl.image_base64,
+                 sbl.classification_label,
                 e.title
             FROM suspicious_behavior_logs sbl
             JOIN exams e ON sbl.exam_id = e.id

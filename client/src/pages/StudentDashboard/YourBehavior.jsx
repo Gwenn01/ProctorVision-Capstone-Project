@@ -13,13 +13,22 @@ const YourBehavior = () => {
       const userId = userData?.id;
 
       try {
-        const response = await axios.get(
-          `http://127.0.0.1:5000/api/get_behavior_logs?user_id=${userId}`
-        );
+        const [logsRes, submissionsRes] = await Promise.all([
+          axios.get(
+            `http://127.0.0.1:5000/api/get_behavior_logs?user_id=${userId}`
+          ),
+          axios.get(
+            `http://127.0.0.1:5000/api/get_exam_submissions?user_id=${userId}`
+          ),
+        ]);
 
-        // Group by exam
+        const submittedExamIds = submissionsRes.data.map((s) => s.exam_id);
+
         const grouped = {};
-        response.data.forEach((entry) => {
+        logsRes.data.forEach((entry) => {
+          // Only include logs for submitted exams
+          if (!submittedExamIds.includes(entry.exam_id)) return;
+
           if (!grouped[entry.exam_id]) {
             grouped[entry.exam_id] = {
               title: entry.title,
@@ -32,9 +41,10 @@ const YourBehavior = () => {
             timestamp: new Date(entry.timestamp).toLocaleString(),
             action: entry.warning_type,
             image: entry.image_base64,
+            label: entry.classification_label || "Not yet classified",
           });
 
-          if (entry.warning_type !== "Stayed Focused") {
+          if (entry.classification_label === "Cheating") {
             grouped[entry.exam_id].cheated = true;
           }
         });
@@ -48,7 +58,7 @@ const YourBehavior = () => {
 
         setBehaviorData(grouped);
       } catch (err) {
-        console.error("Failed to fetch logs", err);
+        console.error("Failed to fetch logs or submissions", err);
       }
     };
 
@@ -87,8 +97,8 @@ const YourBehavior = () => {
               }`}
             >
               {currentData.cheated
-                ? "Cheating detected."
-                : "No suspicious behavior detected."}
+                ? "Cheating detected by AI."
+                : "No cheating behavior detected."}
             </p>
 
             <Table striped bordered hover responsive>
@@ -97,6 +107,7 @@ const YourBehavior = () => {
                   <th>Timestamp</th>
                   <th>Behavior</th>
                   <th>Captured Image</th>
+                  <th>AI Classification</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,6 +127,17 @@ const YourBehavior = () => {
                       ) : (
                         "No Image"
                       )}
+                    </td>
+                    <td
+                      className={
+                        entry.label === "Cheating"
+                          ? "text-danger fw-bold"
+                          : entry.label === "Not Cheating"
+                          ? "text-success fw-bold"
+                          : "text-secondary"
+                      }
+                    >
+                      {entry.label}
                     </td>
                   </tr>
                 ))}

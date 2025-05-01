@@ -75,7 +75,7 @@ const TakeExam = () => {
           const response = await axios.get(
             "http://127.0.0.1:5000/api/detect_warning"
           );
-          console.log("📡 Full API Response:", response.data);
+          console.log("Full API Response:", response.data);
 
           if (response.data.warning !== "Looking Forward") {
             console.log(`⚠️ Warning detected: ${response.data.warning}`);
@@ -105,7 +105,7 @@ const TakeExam = () => {
                 warning_type: response.data.warning,
               });
 
-              console.log("✅ Behavior log saved.");
+              console.log("Behavior log saved.");
             }
           }
         } catch (error) {

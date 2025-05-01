@@ -9,10 +9,10 @@ behavior_bp = Blueprint('behavior', __name__)
 @behavior_bp.route('/save_behavior_log', methods=['POST'])
 def save_behavior_log():
     data = request.json
-    user_id = data.get('user_id')           # Link to users table
-    exam_id = data.get('exam_id')           # Link to exams table
-    image_base64 = data.get('image_base64') # Captured base64 image
-    warning_type = data.get('warning_type') # e.g. "Looking Away"
+    user_id = data.get('user_id')           
+    exam_id = data.get('exam_id')           
+    image_base64 = data.get('image_base64')
+    warning_type = data.get('warning_type') 
 
     # Validation
     if not all([user_id, exam_id, image_base64, warning_type]):

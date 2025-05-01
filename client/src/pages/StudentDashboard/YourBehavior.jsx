@@ -1,45 +1,70 @@
-import React, { useState } from "react";
-import { Container, Card, Table, Form } from "react-bootstrap";
+import React, { useState, useEffect } from "react";
+import { Container, Card, Table, Form, Image } from "react-bootstrap";
+import axios from "axios";
 
 const YourBehavior = () => {
-  // Sample exams
-  const exams = [
-    { id: 1, title: "Math Quiz" },
-    { id: 2, title: "Science Test" },
-  ];
-
-  // Sample student behavior logs
-  const behaviorRecords = {
-    1: {
-      cheated: true,
-      behaviors: [
-        { timestamp: "10:05 AM", action: "Looking right" },
-        { timestamp: "10:10 AM", action: "Looked away from screen frequently" },
-      ],
-    },
-    2: {
-      cheated: false,
-      behaviors: [
-        { timestamp: "10:15 AM", action: "Stayed focused on the exam" },
-      ],
-    },
-  };
-
+  const [exams, setExams] = useState([]);
   const [selectedExam, setSelectedExam] = useState("");
-  const [behaviorData, setBehaviorData] = useState(null);
+  const [behaviorData, setBehaviorData] = useState({});
 
-  // Handle selecting an exam
+  useEffect(() => {
+    const fetchBehaviorLogs = async () => {
+      const userData = JSON.parse(localStorage.getItem("userData"));
+      const userId = userData?.id;
+
+      try {
+        const response = await axios.get(
+          `http://127.0.0.1:5000/api/get_behavior_logs?user_id=${userId}`
+        );
+
+        // Group by exam
+        const grouped = {};
+        response.data.forEach((entry) => {
+          if (!grouped[entry.exam_id]) {
+            grouped[entry.exam_id] = {
+              title: entry.title,
+              behaviors: [],
+              cheated: false,
+            };
+          }
+
+          grouped[entry.exam_id].behaviors.push({
+            timestamp: new Date(entry.timestamp).toLocaleString(),
+            action: entry.warning_type,
+            image: entry.image_base64,
+          });
+
+          if (entry.warning_type !== "Stayed Focused") {
+            grouped[entry.exam_id].cheated = true;
+          }
+        });
+
+        setExams(
+          Object.entries(grouped).map(([id, exam]) => ({
+            id,
+            title: exam.title,
+          }))
+        );
+
+        setBehaviorData(grouped);
+      } catch (err) {
+        console.error("Failed to fetch logs", err);
+      }
+    };
+
+    fetchBehaviorLogs();
+  }, []);
+
   const handleExamSelect = (e) => {
-    const examId = e.target.value;
-    setSelectedExam(examId);
-    setBehaviorData(behaviorRecords[examId] || null);
+    setSelectedExam(e.target.value);
   };
+
+  const currentData = behaviorData[selectedExam];
 
   return (
     <Container className="mt-4">
       <h2 className="mb-4">Your Exam Behavior</h2>
 
-      {/* Select Exam */}
       <Form.Group className="mb-3">
         <Form.Label>Select Exam</Form.Label>
         <Form.Select value={selectedExam} onChange={handleExamSelect}>
@@ -52,36 +77,46 @@ const YourBehavior = () => {
         </Form.Select>
       </Form.Group>
 
-      {/* Show Student Behavior */}
-      {behaviorData && (
+      {currentData && (
         <Card className="p-3 shadow-lg">
           <Card.Body>
-            <h3 className="text-center">
-              {exams.find((e) => e.id == selectedExam)?.title}
-            </h3>
+            <h3 className="text-center">{currentData.title}</h3>
             <p
               className={`text-center fw-bold ${
-                behaviorData.cheated ? "text-danger" : "text-success"
+                currentData.cheated ? "text-danger" : "text-success"
               }`}
             >
-              {behaviorData.cheated
+              {currentData.cheated
                 ? "Cheating detected."
                 : "No suspicious behavior detected."}
             </p>
 
-            {/* Behavior Details */}
-            <Table striped bordered hover>
+            <Table striped bordered hover responsive>
               <thead className="table-dark">
                 <tr>
                   <th>Timestamp</th>
-                  <th>Behavior Recorded</th>
+                  <th>Behavior</th>
+                  <th>Captured Image</th>
                 </tr>
               </thead>
               <tbody>
-                {behaviorData.behaviors.map((entry, index) => (
+                {currentData.behaviors.map((entry, index) => (
                   <tr key={index}>
                     <td>{entry.timestamp}</td>
                     <td>{entry.action}</td>
+                    <td>
+                      {entry.image ? (
+                        <Image
+                          src={`data:image/jpeg;base64,${entry.image}`}
+                          alt="Captured"
+                          width={120}
+                          thumbnail
+                          className="shadow-sm"
+                        />
+                      ) : (
+                        "No Image"
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

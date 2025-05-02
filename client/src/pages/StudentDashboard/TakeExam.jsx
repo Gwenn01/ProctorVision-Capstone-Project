@@ -150,15 +150,19 @@ const TakeExam = () => {
   };
 
   return (
-    <Container className="mt-4">
-      <h2 className="mb-4">Take Exam</h2>
+    <Container fluid className="py-4 px-3 px-md-5">
+      <h2 className="mb-4 fw-bold text-center text-md-start">
+        <i className="bi bi-journal-text me-2"></i>
+        Take Exam
+      </h2>
 
+      {/* Warning Modal */}
       <Modal show={showWarning} onHide={() => setShowWarning(false)} centered>
         <Modal.Header closeButton>
-          <Modal.Title>⚠️ Warning</Modal.Title>
+          <Modal.Title>⚠️ Behavior Warning</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p>{`Warning: You are ${warningMessage}`}</p>
+          <p className="fs-5 text-danger">{`Warning: You are ${warningMessage}`}</p>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="danger" onClick={() => setShowWarning(false)}>
@@ -167,77 +171,92 @@ const TakeExam = () => {
         </Modal.Footer>
       </Modal>
 
+      {/* Exam Selector */}
       {!isTakingExam && (
-        <>
-          <Form.Group className="mb-3">
-            <Form.Label>Select Exam</Form.Label>
-            <Form.Select
-              onChange={handleExamSelect}
-              value={selectedExam ? selectedExam.id : ""}
-            >
-              <option value="">-- Select an Exam --</option>
-              {exams.length === 0 ? (
-                <option disabled>No available exams</option>
-              ) : (
-                exams.map((exam) => (
-                  <option key={exam.id} value={exam.id}>
-                    {exam.title} ({exam.duration_minutes} min)
-                  </option>
-                ))
-              )}
-            </Form.Select>
-          </Form.Group>
-
-          <Button
-            variant="success"
-            onClick={handleStartExam}
-            disabled={!selectedExam}
-          >
-            Start Exam
-          </Button>
-        </>
-      )}
-
-      {isTakingExam && selectedExam && (
-        <Card className="mt-4 p-3 shadow-lg">
-          <Card.Body>
-            <h3 className="text-center">{selectedExam.title}</h3>
-
-            <ProgressBar
-              animated
-              now={(timer / (selectedExam.duration_minutes * 60)) * 100}
-              variant="danger"
-              className="my-3"
-            />
-            <p className="text-center text-danger fw-bold">
-              Time Left: {formatTime(timer)}
-            </p>
-
-            <div className="text-center mt-3">
-              <h5>Live Camera Feed</h5>
-              <img
-                src="http://127.0.0.1:5000/api/video_feed"
-                alt="Webcam Stream"
-                width="440"
-                height="280"
-              />
-            </div>
-
-            <div className="d-flex justify-content-between mt-4">
-              {isSubmitting ? (
-                <div className="w-100 d-flex justify-content-center">
-                  <Spinner />
+        <Row className="justify-content-center">
+          <Col xs={12} md={8} lg={6}>
+            <Card className="p-4 shadow-sm border-0">
+              <Card.Body>
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-semibold">
+                    Select an Exam
+                  </Form.Label>
+                  <Form.Select
+                    onChange={handleExamSelect}
+                    value={selectedExam ? selectedExam.id : ""}
+                  >
+                    <option value="">-- Choose an Exam --</option>
+                    {exams.length === 0 ? (
+                      <option disabled>No available exams</option>
+                    ) : (
+                      exams.map((exam) => (
+                        <option key={exam.id} value={exam.id}>
+                          {exam.title} ({exam.duration_minutes} min)
+                        </option>
+                      ))
+                    )}
+                  </Form.Select>
+                </Form.Group>
+                <div className="text-center mt-3">
+                  <Button
+                    variant="success"
+                    onClick={handleStartExam}
+                    disabled={!selectedExam}
+                    className="w-100"
+                  >
+                    Start Exam
+                  </Button>
                 </div>
-              ) : (
-                <Button variant="primary" onClick={handleSubmitExam}>
-                  Submit Exam
-                </Button>
-              )}
-            </div>
-          </Card.Body>
-        </Card>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
       )}
 
+      {/* Exam View with Camera */}
+      {isTakingExam && selectedExam && (
+        <Row className="justify-content-center mt-4">
+          <Col xs={12} lg={10}>
+            <Card className="p-4 shadow-lg border-0">
+              <Card.Body>
+                <h3 className="text-center fw-bold">{selectedExam.title}</h3>
+
+                <ProgressBar
+                  animated
+                  now={(timer / (selectedExam.duration_minutes * 60)) * 100}
+                  variant="danger"
+                  className="my-3"
+                />
+                <p className="text-center text-danger fw-semibold fs-5">
+                  Time Left: {formatTime(timer)}
+                </p>
+
+                <div className="text-center mt-4">
+                  <h5 className="fw-semibold mb-2">🎥 Live Camera Feed</h5>
+                  <img
+                    src="http://127.0.0.1:5000/api/video_feed"
+                    alt="Webcam Stream"
+                    className="img-fluid rounded border"
+                    style={{ maxWidth: "100%", height: "auto" }}
+                  />
+                </div>
+
+                <div className="d-flex justify-content-center mt-4">
+                  {isSubmitting ? (
+                    <Spinner />
+                  ) : (
+                    <Button variant="primary" onClick={handleSubmitExam}>
+                      Submit Exam
+                    </Button>
+                  )}
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      )}
+
+      {/* Captured Modal */}
       <Modal
         show={showCapturedModal}
         onHide={() => setShowCapturedModal(false)}
@@ -245,32 +264,34 @@ const TakeExam = () => {
         centered
       >
         <Modal.Header closeButton>
-          <Modal.Title>📸 Captured Images</Modal.Title>
+          <Modal.Title>📸 Captured Behavior Logs</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {classifiedLogs.length > 0 ? (
             <Row>
               {classifiedLogs.map((log, index) => (
-                <Col key={index} md={4} className="text-center">
+                <Col
+                  key={index}
+                  xs={12}
+                  sm={6}
+                  md={4}
+                  className="mb-4 text-center"
+                >
                   <img
                     src={`data:image/jpeg;base64,${log.image_base64}`}
                     alt={`Captured ${index}`}
-                    width="100%"
-                    className="mb-2 rounded border shadow"
+                    className="img-fluid rounded shadow-sm border mb-2"
                   />
-                  <p className="mb-1">
-                    <strong>Warning:</strong> {log.warning_type}
-                  </p>
-                  <p
+                  <div className="fw-semibold">Warning: {log.warning_type}</div>
+                  <div
                     className={`fw-bold ${
                       log.classification_label === "Cheating"
                         ? "text-danger"
                         : "text-success"
                     }`}
                   >
-                    <strong>Result:</strong>{" "}
-                    {log.classification_label || "Not yet classified"}
-                  </p>
+                    Result: {log.classification_label || "Unclassified"}
+                  </div>
                 </Col>
               ))}
             </Row>

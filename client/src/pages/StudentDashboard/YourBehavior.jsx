@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Container, Card, Table, Form, Image } from "react-bootstrap";
+import { Container, Card, Table, Form, Image, Row, Col } from "react-bootstrap";
 import axios from "axios";
 
 const YourBehavior = () => {
@@ -26,7 +26,6 @@ const YourBehavior = () => {
 
         const grouped = {};
         logsRes.data.forEach((entry) => {
-          // Only include logs for submitted exams
           if (!submittedExamIds.includes(entry.exam_id)) return;
 
           if (!grouped[entry.exam_id]) {
@@ -55,7 +54,6 @@ const YourBehavior = () => {
             title: exam.title,
           }))
         );
-
         setBehaviorData(grouped);
       } catch (err) {
         console.error("Failed to fetch logs or submissions", err);
@@ -65,84 +63,96 @@ const YourBehavior = () => {
     fetchBehaviorLogs();
   }, []);
 
-  const handleExamSelect = (e) => {
-    setSelectedExam(e.target.value);
-  };
+  const handleExamSelect = (e) => setSelectedExam(e.target.value);
 
   const currentData = behaviorData[selectedExam];
 
   return (
-    <Container className="mt-4">
-      <h2 className="mb-4">Your Exam Behavior</h2>
+    <Container fluid className="py-4 px-3 px-md-5">
+      <h2 className="mb-4 fw-bold text-center text-md-start">
+        <i className="bi bi-graph-up-arrow me-2"></i>
+        Your Exam Behavior
+      </h2>
 
-      <Form.Group className="mb-3">
-        <Form.Label>Select Exam</Form.Label>
-        <Form.Select value={selectedExam} onChange={handleExamSelect}>
-          <option value="">-- Select an Exam --</option>
-          {exams.map((exam) => (
-            <option key={exam.id} value={exam.id}>
-              {exam.title}
-            </option>
-          ))}
-        </Form.Select>
-      </Form.Group>
+      <Row className="justify-content-center">
+        <Col xs={12} md={10} lg={8} xl={6}>
+          <Card className="shadow-sm border-0 mb-4">
+            <Card.Body>
+              <Form.Group>
+                <Form.Label className="fw-semibold">Select an Exam</Form.Label>
+                <Form.Select value={selectedExam} onChange={handleExamSelect}>
+                  <option value="">-- Choose an Exam --</option>
+                  {exams.map((exam) => (
+                    <option key={exam.id} value={exam.id}>
+                      {exam.title}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
 
       {currentData && (
-        <Card className="p-3 shadow-lg">
+        <Card className="p-4 shadow-lg border-0">
           <Card.Body>
-            <h3 className="text-center">{currentData.title}</h3>
+            <h3 className="text-center fw-bold">{currentData.title}</h3>
             <p
-              className={`text-center fw-bold ${
+              className={`text-center fw-semibold fs-5 mb-4 ${
                 currentData.cheated ? "text-danger" : "text-success"
               }`}
             >
               {currentData.cheated
-                ? "Cheating detected by AI."
-                : "No cheating behavior detected."}
+                ? "❌ Cheating detected by the AI system."
+                : "✅ No cheating behavior detected."}
             </p>
 
-            <Table striped bordered hover responsive>
-              <thead className="table-dark">
-                <tr>
-                  <th>Timestamp</th>
-                  <th>Behavior</th>
-                  <th>Captured Image</th>
-                  <th>AI Classification</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentData.behaviors.map((entry, index) => (
-                  <tr key={index}>
-                    <td>{entry.timestamp}</td>
-                    <td>{entry.action}</td>
-                    <td>
-                      {entry.image ? (
-                        <Image
-                          src={`data:image/jpeg;base64,${entry.image}`}
-                          alt="Captured"
-                          width={120}
-                          thumbnail
-                          className="shadow-sm"
-                        />
-                      ) : (
-                        "No Image"
-                      )}
-                    </td>
-                    <td
-                      className={
-                        entry.label === "Cheating"
-                          ? "text-danger fw-bold"
-                          : entry.label === "Not Cheating"
-                          ? "text-success fw-bold"
-                          : "text-secondary"
-                      }
-                    >
-                      {entry.label}
-                    </td>
+            <div className="table-responsive">
+              <Table striped bordered hover className="mb-0 align-middle">
+                <thead className="table-dark">
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Behavior</th>
+                    <th>Captured Image</th>
+                    <th>AI Classification</th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
+                </thead>
+                <tbody>
+                  {currentData.behaviors.map((entry, index) => (
+                    <tr key={index}>
+                      <td>{entry.timestamp}</td>
+                      <td>{entry.action}</td>
+                      <td className="text-center">
+                        {entry.image ? (
+                          <Image
+                            src={`data:image/jpeg;base64,${entry.image}`}
+                            alt="Captured"
+                            fluid
+                            thumbnail
+                            className="shadow-sm"
+                            style={{ maxWidth: "100px" }}
+                          />
+                        ) : (
+                          "No Image"
+                        )}
+                      </td>
+                      <td
+                        className={`fw-bold text-center ${
+                          entry.label === "Cheating"
+                            ? "text-danger"
+                            : entry.label === "Not Cheating"
+                            ? "text-success"
+                            : "text-secondary"
+                        }`}
+                      >
+                        {entry.label}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
           </Card.Body>
         </Card>
       )}

@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Container, Table, Button, Modal } from "react-bootstrap";
+import {
+  Container,
+  Table,
+  Button,
+  Modal,
+  Row,
+  Col,
+  Card,
+} from "react-bootstrap";
 import axios from "axios";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -32,53 +40,68 @@ const ManageExam = () => {
   };
 
   return (
-    <Container className="mt-4">
+    <Container fluid className="py-4 px-3 px-md-5">
       <ToastContainer autoClose={3000} />
-      <h2 className="mb-4">Manage Exams</h2>
+      <h2 className="mb-4 fw-bold text-center text-md-start">
+        <i className="bi bi-journal-bookmark-fill me-2"></i>Manage Exams
+      </h2>
 
-      <Table striped bordered hover>
-        <thead className="table-dark">
-          <tr>
-            <th>ID</th>
-            <th>Title</th>
-            <th>Description</th>
-            <th>Duration</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {exams.length > 0 ? (
-            exams.map((exam) => (
-              <tr key={exam.id}>
-                <td>{exam.id}</td>
-                <td>{exam.title}</td>
-                <td>{exam.description}</td>
-                <td>{exam.duration_minutes} minutes</td>
-                <td>
-                  <Button
-                    variant="info"
-                    size="sm"
-                    onClick={() => handleViewExam(exam)}
-                  >
-                    View
-                  </Button>
-                </td>
+      <Card className="shadow-sm border-0 p-3">
+        <div className="table-responsive">
+          <Table striped bordered hover className="align-middle mb-0">
+            <thead className="table-dark">
+              <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Description</th>
+                <th>Duration</th>
+                <th className="text-center">Actions</th>
               </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan="5" className="text-center">
-                No exams found.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </Table>
+            </thead>
+            <tbody>
+              {exams.length > 0 ? (
+                exams.map((exam) => (
+                  <tr key={exam.id}>
+                    <td>{exam.id}</td>
+                    <td>{exam.title}</td>
+                    <td>{exam.description}</td>
+                    <td>{exam.duration_minutes} minutes</td>
+                    <td className="text-center">
+                      <Button
+                        variant="info"
+                        size="sm"
+                        onClick={() => handleViewExam(exam)}
+                      >
+                        <i className="bi bi-eye me-1"></i> View
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="text-center text-muted">
+                    No exams found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </Table>
+        </div>
+      </Card>
 
+      {/* View Modal */}
       {selectedExam && (
-        <Modal show={showModal} onHide={() => setShowModal(false)}>
+        <Modal
+          show={showModal}
+          onHide={() => setShowModal(false)}
+          centered
+          size="md"
+        >
           <Modal.Header closeButton>
-            <Modal.Title>Exam: {selectedExam.title}</Modal.Title>
+            <Modal.Title>
+              <i className="bi bi-info-circle me-2"></i>
+              Exam: {selectedExam.title}
+            </Modal.Title>
           </Modal.Header>
           <Modal.Body>
             <p>

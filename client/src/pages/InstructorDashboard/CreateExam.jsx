@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Container, Card, Button, Form, Row, Col } from "react-bootstrap";
+import {
+  Container,
+  Card,
+  Button,
+  Form,
+  Row,
+  Col,
+  ListGroup,
+} from "react-bootstrap";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -22,7 +30,6 @@ const CreateExam = () => {
   const [isExamCreated, setIsExamCreated] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Fetch assigned students on load
   useEffect(() => {
     if (instructorId) {
       fetchAssignedStudents();
@@ -107,36 +114,43 @@ const CreateExam = () => {
   };
 
   return (
-    <Container className="mt-4">
+    <Container fluid className="py-4 px-3 px-md-5">
       <ToastContainer autoClose={2500} />
-      <Card className="shadow-lg p-4">
+      <Card className="shadow-lg border-0 p-4">
         <Card.Body>
-          <h2 className="text-center mb-3">Exam Setup</h2>
+          <h2 className="text-center fw-bold mb-4">
+            <i className="bi bi-pencil-square me-2"></i>Exam Setup
+          </h2>
 
           {!isExamCreated ? (
             <>
               <Form.Group className="mb-3">
-                <Form.Label>Exam Title</Form.Label>
+                <Form.Label className="fw-semibold">Exam Title</Form.Label>
                 <Form.Control
                   type="text"
                   name="title"
                   value={examData.title}
                   onChange={handleChange}
+                  placeholder="Enter exam title"
                 />
               </Form.Group>
 
               <Form.Group className="mb-3">
-                <Form.Label>Exam Description</Form.Label>
+                <Form.Label className="fw-semibold">Description</Form.Label>
                 <Form.Control
-                  type="text"
+                  as="textarea"
+                  rows={2}
                   name="description"
                   value={examData.description}
                   onChange={handleChange}
+                  placeholder="Brief exam description"
                 />
               </Form.Group>
 
-              <Form.Group className="mb-3">
-                <Form.Label>Duration (minutes)</Form.Label>
+              <Form.Group className="mb-4">
+                <Form.Label className="fw-semibold">
+                  Duration (minutes)
+                </Form.Label>
                 <Form.Control
                   type="number"
                   name="time"
@@ -156,7 +170,7 @@ const CreateExam = () => {
             </>
           ) : (
             <>
-              <h4 className="mb-3">Title: {examData.title}</h4>
+              <h4 className="fw-bold mb-3">{examData.title}</h4>
               <p>
                 <strong>Description:</strong> {examData.description}
               </p>
@@ -164,8 +178,8 @@ const CreateExam = () => {
                 <strong>Duration:</strong> {examData.time} minutes
               </p>
 
-              <h5 className="mt-4">Enroll Students</h5>
-              <Row>
+              <h5 className="mt-4 mb-3">Enroll Students</h5>
+              <Row className="align-items-center mb-3">
                 <Col md={8}>
                   <Form.Select
                     value={selectedStudent}
@@ -179,21 +193,25 @@ const CreateExam = () => {
                     ))}
                   </Form.Select>
                 </Col>
-                <Col md={4}>
-                  <Button variant="primary" onClick={handleAddStudent}>
+                <Col md={4} className="mt-2 mt-md-0">
+                  <Button
+                    variant="primary"
+                    className="w-100"
+                    onClick={handleAddStudent}
+                  >
                     Add Student
                   </Button>
                 </Col>
               </Row>
 
               {enrolledStudents.length > 0 && (
-                <Card className="mt-3 p-3">
-                  <h6>Enrolled Students:</h6>
-                  <ul className="list-group">
+                <Card className="mt-3 p-3 border-0 shadow-sm">
+                  <h6 className="fw-semibold mb-3">Enrolled Students:</h6>
+                  <ListGroup>
                     {enrolledStudents.map((student) => (
-                      <li
+                      <ListGroup.Item
                         key={student.id}
-                        className="list-group-item d-flex justify-content-between align-items-center"
+                        className="d-flex justify-content-between align-items-center"
                       >
                         {student.name}
                         <Button
@@ -203,15 +221,15 @@ const CreateExam = () => {
                         >
                           Remove
                         </Button>
-                      </li>
+                      </ListGroup.Item>
                     ))}
-                  </ul>
+                  </ListGroup>
                 </Card>
               )}
 
               <Button
                 variant="success"
-                className="mt-3"
+                className="mt-4 w-100"
                 onClick={handleSaveExam}
                 disabled={loading}
               >

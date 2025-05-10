@@ -4,39 +4,97 @@ import {
   Table,
   Button,
   Modal,
-  Row,
-  Col,
   Card,
+  Form,
+  Spinner,
 } from "react-bootstrap";
 import axios from "axios";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 const ManageExam = () => {
   const [exams, setExams] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedExam, setSelectedExam] = useState(null);
+  const [enrolledStudents, setEnrolledStudents] = useState([]);
+  const [allStudents, setAllStudents] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const instructorId = userData.id;
 
-  const fetchExams = async () => {
-    try {
-      const res = await axios.get(
-        `http://localhost:5000/api/exams/${instructorId}`
-      );
-      setExams(res.data);
-    } catch (err) {
-      console.error("Failed to fetch exams", err);
-    }
-  };
-
   useEffect(() => {
+    const fetchExams = async () => {
+      try {
+        const res = await axios.get(
+          `http://localhost:5000/api/exams/${instructorId}`
+        );
+        setExams(res.data);
+      } catch (err) {
+        console.error("Failed to fetch exams", err);
+      }
+    };
+
     if (instructorId) fetchExams();
   }, [instructorId]);
 
+  const fetchStudents = async (examId) => {
+    try {
+      setLoading(true);
+      const [enrolledRes, allRes] = await Promise.all([
+        axios.get(`http://localhost:5000/api/exam_students/${examId}`),
+        axios.get("http://localhost:5000/api/students"),
+      ]);
+      setEnrolledStudents(enrolledRes.data);
+      setAllStudents(allRes.data);
+    } catch (err) {
+      console.error("Failed to fetch students", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleViewExam = (exam) => {
     setSelectedExam(exam);
+    fetchStudents(exam.id);
     setShowModal(true);
+  };
+
+  const handleAddStudent = async () => {
+    // Check if student is already enrolled
+    const alreadyEnrolled = enrolledStudents.some(
+      (student) => student.id.toString() === selectedStudent.toString()
+    );
+
+    if (alreadyEnrolled) {
+      toast.warning("Student is already enrolled in this exam.");
+      return;
+    }
+
+    try {
+      await axios.post(`http://localhost:5000/api/exam_students`, {
+        exam_id: selectedExam.id,
+        student_id: selectedStudent,
+      });
+      toast.success("Student added successfully");
+      fetchStudents(selectedExam.id);
+      setSelectedStudent(""); // reset dropdown
+    } catch (err) {
+      toast.error("Failed to add student");
+    }
+  };
+
+  const handleRemoveStudent = async (studentId) => {
+    try {
+      await axios.delete(
+        `http://localhost:5000/api/exam_students/${selectedExam.id}/${studentId}`
+      );
+      toast.success("Student removed successfully");
+      fetchStudents(selectedExam.id);
+    } catch (err) {
+      toast.error("Failed to remove student");
+    }
   };
 
   return (
@@ -89,13 +147,12 @@ const ManageExam = () => {
         </div>
       </Card>
 
-      {/* View Modal */}
       {selectedExam && (
         <Modal
           show={showModal}
           onHide={() => setShowModal(false)}
           centered
-          size="md"
+          size="lg"
         >
           <Modal.Header closeButton>
             <Modal.Title>
@@ -103,19 +160,69 @@ const ManageExam = () => {
               Exam: {selectedExam.title}
             </Modal.Title>
           </Modal.Header>
-          <Modal.Body>
+          <Modal.Body style={{ maxHeight: "500px", overflowY: "auto" }}>
             <p>
               <strong>Description:</strong> {selectedExam.description}
             </p>
             <p>
-              <strong>Duration:</strong> {selectedExam.time} minutes
+              <strong>Duration:</strong> {selectedExam.duration_minutes} minutes
             </p>
+
+            <h5 className="mt-4">Enrolled Students</h5>
+            {loading ? (
+              <div className="text-center my-3">
+                <Spinner animation="border" variant="primary" />
+              </div>
+            ) : (
+              <div
+                className="mb-4"
+                style={{ maxHeight: "300px", overflowY: "auto" }}
+              >
+                <ul className="list-group">
+                  {enrolledStudents.map((student) => (
+                    <li
+                      key={student.id}
+                      className="list-group-item d-flex justify-content-between align-items-center"
+                    >
+                      <div>
+                        <div className="fw-bold">{student.name}</div>
+                        <div className="text-muted small">{student.email}</div>
+                      </div>
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        onClick={() => handleRemoveStudent(student.id)}
+                      >
+                        <i className="bi bi-x-circle me-1"></i>Remove
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <Form.Group controlId="addStudent" className="mt-3">
+              <Form.Label>Add Student</Form.Label>
+              <Form.Select
+                value={selectedStudent}
+                onChange={(e) => setSelectedStudent(e.target.value)}
+              >
+                <option value="">-- Select Student --</option>
+                {allStudents.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.email})
+                  </option>
+                ))}
+              </Form.Select>
+              <Button
+                variant="success"
+                className="mt-2"
+                onClick={handleAddStudent}
+                disabled={!selectedStudent}
+              >
+                Add Student
+              </Button>
+            </Form.Group>
           </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
-              Close
-            </Button>
-          </Modal.Footer>
         </Modal>
       )}
     </Container>

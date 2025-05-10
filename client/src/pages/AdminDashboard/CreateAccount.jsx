@@ -1,5 +1,13 @@
 import React, { useState } from "react";
-import { Container, Card, Button, Form } from "react-bootstrap";
+import {
+  Container,
+  Card,
+  Button,
+  Form,
+  Spinner,
+  Row,
+  Col,
+} from "react-bootstrap";
 import {
   FaUserGraduate,
   FaChalkboardTeacher,
@@ -8,10 +16,10 @@ import {
   FaKey,
   FaIdBadge,
   FaHashtag,
+  FaUserCircle,
 } from "react-icons/fa";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import Spinner from "../../components/Spinner"; // Make sure this Spinner component exists
 
 const CreateAccount = () => {
   const [userType, setUserType] = useState(null);
@@ -24,9 +32,8 @@ const CreateAccount = () => {
   });
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
+  const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,6 +53,13 @@ const CreateAccount = () => {
       if (response.ok) {
         toast.success(result.message);
         setUserType(null);
+        setFormData({
+          id: "",
+          name: "",
+          username: "",
+          email: "",
+          password: "",
+        });
       } else {
         toast.error(result.error || "Failed to create account.");
       }
@@ -58,29 +72,36 @@ const CreateAccount = () => {
   };
 
   return (
-    <Container className="d-flex flex-column align-items-center justify-content-center mt-4">
+    <Container className="mt-5 d-flex justify-content-center">
       <ToastContainer />
-      <Card className="shadow-lg border-0 p-4" style={{ width: "30rem" }}>
+      <Card
+        className="shadow-lg p-4 rounded-4 w-100"
+        style={{ maxWidth: "600px" }}
+      >
         <Card.Body>
-          <Card.Title className="text-center mb-3 fw-bold fs-4">
-            Create Account
-          </Card.Title>
+          {/* Top Icon */}
+          <div className="text-center mb-3">
+            <FaUserCircle size={64} className="text-dark mb-2" />
+            <Card.Title className="fw-bold fs-3 text-dark">
+              Create Account
+            </Card.Title>
+          </div>
 
           {!userType ? (
             <>
-              <p className="text-center">
+              <p className="text-center text-muted mb-3">
                 Select the type of account you want to create:
               </p>
               <div className="d-flex justify-content-center gap-3">
                 <Button
-                  variant="primary"
+                  variant="outline-dark"
                   className="d-flex align-items-center"
                   onClick={() => setUserType("Student")}
                 >
                   <FaUserGraduate className="me-2" /> Student
                 </Button>
                 <Button
-                  variant="success"
+                  variant="outline-dark"
                   className="d-flex align-items-center"
                   onClick={() => setUserType("Instructor")}
                 >
@@ -89,18 +110,18 @@ const CreateAccount = () => {
               </div>
             </>
           ) : loading ? (
-            <div className="text-center mt-3">
-              <Spinner /> {/* Reuse your Spinner component */}
-              <p className="mt-2">Creating account...</p>
+            <div className="text-center mt-4">
+              <Spinner animation="border" variant="dark" />
+              <p className="mt-2 text-muted">Creating account...</p>
             </div>
           ) : (
             <Form onSubmit={handleSubmit}>
-              <p className="text-center">
+              <p className="text-center text-muted mb-4">
                 Creating a <strong>{userType}</strong> account
               </p>
 
               <Form.Group className="mb-3">
-                <Form.Label>
+                <Form.Label className="fw-semibold">
                   <FaHashtag className="me-2" /> ID
                 </Form.Label>
                 <Form.Control
@@ -114,7 +135,7 @@ const CreateAccount = () => {
               </Form.Group>
 
               <Form.Group className="mb-3">
-                <Form.Label>
+                <Form.Label className="fw-semibold">
                   <FaUser className="me-2" /> Full Name
                 </Form.Label>
                 <Form.Control
@@ -128,7 +149,7 @@ const CreateAccount = () => {
               </Form.Group>
 
               <Form.Group className="mb-3">
-                <Form.Label>
+                <Form.Label className="fw-semibold">
                   <FaIdBadge className="me-2" /> Username
                 </Form.Label>
                 <Form.Control
@@ -142,7 +163,7 @@ const CreateAccount = () => {
               </Form.Group>
 
               <Form.Group className="mb-3">
-                <Form.Label>
+                <Form.Label className="fw-semibold">
                   <FaEnvelope className="me-2" /> Email Address
                 </Form.Label>
                 <Form.Control
@@ -155,8 +176,8 @@ const CreateAccount = () => {
                 />
               </Form.Group>
 
-              <Form.Group className="mb-3">
-                <Form.Label>
+              <Form.Group className="mb-4">
+                <Form.Label className="fw-semibold">
                   <FaKey className="me-2" /> Password
                 </Form.Label>
                 <Form.Control
@@ -169,14 +190,21 @@ const CreateAccount = () => {
                 />
               </Form.Group>
 
-              <div className="d-flex justify-content-between">
-                <Button variant="secondary" onClick={() => setUserType(null)}>
-                  Back
-                </Button>
-                <Button variant="dark" type="submit">
-                  Create Account
-                </Button>
-              </div>
+              <Row>
+                <Col className="text-start">
+                  <Button
+                    variant="outline-secondary"
+                    onClick={() => setUserType(null)}
+                  >
+                    Back
+                  </Button>
+                </Col>
+                <Col className="text-end">
+                  <Button variant="dark" type="submit">
+                    Create Account
+                  </Button>
+                </Col>
+              </Row>
             </Form>
           )}
         </Card.Body>

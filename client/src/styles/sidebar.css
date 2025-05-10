@@ -52,3 +52,9 @@
   background: #f4f6f9;
   min-height: 100vh;
 }
+/* Apply this to your main content wrapper */
+@media (min-width: 768px) {
+  .main-content {
+    margin-left: 240px;
+  }
+}

@@ -47,7 +47,18 @@ const Sidebar = ({ role }) => {
   const links = menuItems[role] || menuItems.Student;
 
   return (
-    <div className="d-flex flex-column text-white min-vh-100 p-3 gap-3">
+    <div
+      className="d-flex flex-column text-white p-3 gap-3 bg-dark"
+      style={{
+        position: "fixed",
+        top: 0,
+        bottom: 0,
+        left: 0,
+        width: "240px",
+        overflowY: "auto",
+        zIndex: 1000,
+      }}
+    >
       {/* Logo and Title */}
       <div className="text-center">
         <img

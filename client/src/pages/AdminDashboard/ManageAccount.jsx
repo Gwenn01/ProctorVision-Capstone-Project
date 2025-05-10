@@ -1,6 +1,23 @@
 import React, { useEffect, useState } from "react";
-import { Container, Table, Button, Form, Modal } from "react-bootstrap";
+import {
+  Container,
+  Table,
+  Button,
+  Form,
+  Modal,
+  Row,
+  Col,
+} from "react-bootstrap";
 import axios from "axios";
+import {
+  FaUsersCog,
+  FaUserEdit,
+  FaTrash,
+  FaFilter,
+  FaUser,
+  FaIdBadge,
+  FaEnvelope,
+} from "react-icons/fa";
 
 const ManageAccount = () => {
   const [users, setUsers] = useState([]);
@@ -8,7 +25,6 @@ const ManageAccount = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
-  // Fetch users on load
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -37,7 +53,7 @@ const ManageAccount = () => {
         `http://localhost:5000/api/users/${selectedUser.id}`,
         selectedUser
       );
-      fetchUsers(); // Refresh list
+      fetchUsers();
       setShowModal(false);
     } catch (err) {
       console.error("Update failed:", err);
@@ -61,20 +77,29 @@ const ManageAccount = () => {
       : users.filter((user) => user.role === filterRole);
 
   return (
-    <Container>
-      <h2 className="mb-4">Manage Account</h2>
+    <Container className="mt-5">
+      <div className="d-flex align-items-center mb-4">
+        <FaUsersCog size={28} className="me-2 text-dark" />
+        <h3 className="fw-bold mb-0">Manage Accounts</h3>
+      </div>
 
-      <Form.Group className="mb-3">
-        <Form.Label>Filter by Role:</Form.Label>
-        <Form.Select value={filterRole} onChange={handleFilterChange}>
+      <Form.Group className="mb-4">
+        <Form.Label className="fw-semibold">
+          <FaFilter className="me-2" /> Filter by Role:
+        </Form.Label>
+        <Form.Select
+          value={filterRole}
+          onChange={handleFilterChange}
+          className="w-auto"
+        >
           <option value="All">All</option>
           <option value="Student">Student</option>
           <option value="Instructor">Instructor</option>
         </Form.Select>
       </Form.Group>
 
-      <Table striped bordered hover>
-        <thead className="table-dark">
+      <Table striped bordered hover responsive className="shadow-sm">
+        <thead className="table-dark text-center">
           <tr>
             <th>ID</th>
             <th>Role</th>
@@ -87,7 +112,7 @@ const ManageAccount = () => {
         <tbody>
           {filteredUsers.length > 0 ? (
             filteredUsers.map((user) => (
-              <tr key={user.id}>
+              <tr key={user.id} className="align-middle text-center">
                 <td>{user.id}</td>
                 <td>{user.role}</td>
                 <td>{user.name}</td>
@@ -95,26 +120,26 @@ const ManageAccount = () => {
                 <td>{user.email}</td>
                 <td>
                   <Button
-                    variant="warning"
+                    variant="outline-warning"
                     size="sm"
                     className="me-2"
                     onClick={() => handleEdit(user)}
                   >
-                    Edit
+                    <FaUserEdit className="me-1" /> Edit
                   </Button>
                   <Button
-                    variant="danger"
+                    variant="outline-danger"
                     size="sm"
                     onClick={() => handleDelete(user.id)}
                   >
-                    Delete
+                    <FaTrash className="me-1" /> Delete
                   </Button>
                 </td>
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan="6" className="text-center">
+              <td colSpan="6" className="text-center text-muted">
                 No users found
               </td>
             </tr>
@@ -123,15 +148,19 @@ const ManageAccount = () => {
       </Table>
 
       {/* Edit Modal */}
-      <Modal show={showModal} onHide={() => setShowModal(false)}>
+      <Modal show={showModal} onHide={() => setShowModal(false)} centered>
         <Modal.Header closeButton>
-          <Modal.Title>Edit User</Modal.Title>
+          <Modal.Title>
+            <FaUserEdit className="me-2" /> Edit User
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {selectedUser && (
             <Form>
               <Form.Group className="mb-3">
-                <Form.Label>Name</Form.Label>
+                <Form.Label>
+                  <FaUser className="me-2" /> Name
+                </Form.Label>
                 <Form.Control
                   type="text"
                   value={selectedUser.name}
@@ -141,7 +170,9 @@ const ManageAccount = () => {
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Username</Form.Label>
+                <Form.Label>
+                  <FaIdBadge className="me-2" /> Username
+                </Form.Label>
                 <Form.Control
                   type="text"
                   value={selectedUser.username}
@@ -154,7 +185,9 @@ const ManageAccount = () => {
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Email</Form.Label>
+                <Form.Label>
+                  <FaEnvelope className="me-2" /> Email
+                </Form.Label>
                 <Form.Control
                   type="email"
                   value={selectedUser.email}
@@ -170,7 +203,7 @@ const ManageAccount = () => {
           <Button variant="secondary" onClick={() => setShowModal(false)}>
             Cancel
           </Button>
-          <Button variant="success" onClick={handleSaveChanges}>
+          <Button variant="dark" onClick={handleSaveChanges}>
             Save Changes
           </Button>
         </Modal.Footer>

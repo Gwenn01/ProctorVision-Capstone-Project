@@ -3,13 +3,27 @@ from database.connection import get_db_connection
 
 manage_users_bp = Blueprint('manage_users', __name__)
 
-# Get all users (Students + Instructors)
+#  unified: Get all users or filter by role
 @manage_users_bp.route("/users", methods=["GET"])
 def get_users():
+    role = request.args.get("role")
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, user_id, name, username, email, user_type AS role FROM users")
+
+        if role:
+            cursor.execute("""
+                SELECT id, user_id, name, username, email, user_type AS role
+                FROM users
+                WHERE user_type = %s
+            """, (role,))
+        else:
+            cursor.execute("""
+                SELECT id, user_id, name, username, email, user_type AS role
+                FROM users
+            """)
+
         users = cursor.fetchall()
         return jsonify(users), 200
     except Exception as e:
@@ -51,3 +65,5 @@ def delete_user(user_id):
     finally:
         if conn:
             conn.close()
+            
+

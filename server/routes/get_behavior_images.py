@@ -76,3 +76,24 @@ def get_behavior_images(exam_id, student_id):
     finally:
         if conn:
             conn.close()
+            
+            
+# fetch behavior logs for that specific student and exam
+@get_behavior_images_bp.route('/student-exams/<int:student_id>', methods=['GET'])
+def get_student_exams(student_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT DISTINCT e.id, e.title
+            FROM exams e
+            JOIN exam_submissions es ON e.id = es.exam_id
+            WHERE es.user_id = %s
+        """, (student_id,))
+        exams = cursor.fetchall()
+        return jsonify(exams), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()

@@ -11,7 +11,7 @@ from database.connection import get_db_connection
 
 classification_bp = Blueprint('classification_bp', __name__)
 
-# ✅ Load the cheating detection model
+# Load the cheating detection model
 model_path = "cheating_detection_model.h5"
 
 if os.path.exists(model_path):
@@ -22,7 +22,7 @@ else:
     print(f"Error: Model file '{model_path}' not found.")
 
 
-# ✅ Route 1: Manual classification for uploaded files
+# Route 1: Manual classification for uploaded files
 @classification_bp.route('/classify_multiple', methods=['POST'])
 def classify_multiple():
     if model is None:
@@ -42,7 +42,7 @@ def classify_multiple():
 
             prediction = model.predict(image)
 
-            # ✅ Flexible check regardless of model output shape
+            # Flexible check regardless of model output shape
             if prediction.shape[1] == 2:
                 label = "Cheating" if prediction[0][1] > prediction[0][0] else "Not Cheating"
             else:
@@ -56,7 +56,7 @@ def classify_multiple():
     return jsonify({"results": results})
 
 
-# ✅ Route 2: Auto-classify student logs after exam
+# Route 2: Auto-classify student logs after exam
 @classification_bp.route('/classify_behavior_logs', methods=['POST'])
 def classify_behavior_logs():
     if model is None:

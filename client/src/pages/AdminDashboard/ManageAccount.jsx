@@ -18,6 +18,8 @@ import {
   FaIdBadge,
   FaEnvelope,
 } from "react-icons/fa";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const ManageAccount = () => {
   const [users, setUsers] = useState([]);
@@ -55,6 +57,7 @@ const ManageAccount = () => {
       );
       fetchUsers();
       setShowModal(false);
+      toast.success("User updated successfully!");
     } catch (err) {
       console.error("Update failed:", err);
     }
@@ -65,6 +68,7 @@ const ManageAccount = () => {
       try {
         await axios.delete(`http://localhost:5000/api/users/${id}`);
         fetchUsers();
+        toast.success("User deleted successfully!");
       } catch (err) {
         console.error("Delete failed:", err);
       }

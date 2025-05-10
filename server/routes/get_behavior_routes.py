@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify
 from database.connection import get_db_connection
 
-# ✅ New blueprint name to avoid conflict
+# New blueprint name to avoid conflict
 get_behavior_bp = Blueprint('get_behavior', __name__)
 
-# 📤 GET /api/get_behavior_logs - fetch suspicious behavior logs for a user
+#  GET /api/get_behavior_logs - fetch suspicious behavior logs for a user
 @get_behavior_bp.route('/get_behavior_logs', methods=['GET'])
 def get_behavior_logs():
     user_id = request.args.get('user_id')

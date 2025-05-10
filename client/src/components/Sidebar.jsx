@@ -20,6 +20,16 @@ const Sidebar = ({ role }) => {
     Admin: [
       { href: "create-account", icon: "people", label: "Create Account" },
       { href: "manage-account", icon: "gear", label: "Manage Account" },
+      {
+        href: "manage-admin-exam",
+        icon: "clipboard-data",
+        label: "Manage Exam",
+      },
+      {
+        href: "manage-admin-behavior",
+        icon: "activity",
+        label: "Manage Behavior",
+      },
     ],
     Instructor: [
       { href: "manage-student", icon: "person", label: "Manage Student" },

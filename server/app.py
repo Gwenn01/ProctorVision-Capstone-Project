@@ -29,6 +29,7 @@ from routes.create_account_routes import create_account_bp
 from routes.auth_routes import auth_bp
 from routes.video_routes import video_bp
 from routes.manage_users_routes import manage_users_bp
+from routes.instructor_exam_routes import instructor_exam_bp
 from routes.enrollment_routes import enrollment_bp
 from routes.exam_routes import exam_bp
 from routes.manage_exam_routes import manage_exam_routes
@@ -44,6 +45,7 @@ app.register_blueprint(create_account_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(video_bp, url_prefix='/api')
 app.register_blueprint(manage_users_bp, url_prefix="/api")
+app.register_blueprint(instructor_exam_bp, url_prefix='/api')
 app.register_blueprint(enrollment_bp, url_prefix="/api")
 app.register_blueprint(exam_bp, url_prefix="/api")
 app.register_blueprint(manage_exam_routes, url_prefix='/api')

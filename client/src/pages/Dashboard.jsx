@@ -6,6 +6,8 @@ import Sidebar from "../components/Sidebar";
 // Admin Pages
 import CreateAccount from "./AdminDashboard/CreateAccount";
 import ManageAccount from "./AdminDashboard/ManageAccount";
+import ManageAdminExam from "./AdminDashboard/ManageExam";
+import ManageBehavior from "./AdminDashboard/ManageBehavior";
 
 // Instructor Pages
 import CreateExam from "./InstructorDashboard/CreateExam";
@@ -53,6 +55,11 @@ const Dashboard = () => {
                 <Route path="/" element={<CreateAccount />} />
                 <Route path="create-account" element={<CreateAccount />} />
                 <Route path="manage-account" element={<ManageAccount />} />
+                <Route path="manage-admin-exam" element={<ManageAdminExam />} />
+                <Route
+                  path="manage-admin-behavior"
+                  element={<ManageBehavior />}
+                />
               </>
             )}
 

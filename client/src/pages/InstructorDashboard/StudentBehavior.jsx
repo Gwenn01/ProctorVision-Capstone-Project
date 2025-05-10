@@ -1,100 +1,94 @@
-import React, { useState } from "react";
-import { Container, Table, Button, Modal, Form } from "react-bootstrap";
+import React, { useState, useEffect } from "react";
+import {
+  Container,
+  Table,
+  Button,
+  Modal,
+  Form,
+  Badge,
+  Spinner,
+} from "react-bootstrap";
+import axios from "axios";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const StudentBehavior = () => {
-  // Sample exam data (Replace with backend data)
-  const exams = [
-    { id: 1, title: "Math Quiz" },
-    { id: 2, title: "Science Test" },
-    { id: 3, title: "History Exam" },
-  ];
-
-  // Sample student behavior records per exam
-  const behaviorRecords = {
-    1: [
-      // Math Quiz
-      {
-        id: 1,
-        name: "John Doe",
-        username: "johndoe",
-        cheated: true,
-        behaviors: [
-          "Switching tabs multiple times",
-          "Looking left frequently",
-          "Minimized exam window",
-        ],
-      },
-      {
-        id: 2,
-        name: "Alice Johnson",
-        username: "alicej",
-        cheated: false,
-        behaviors: ["No suspicious activity"],
-      },
-    ],
-    2: [
-      // Science Test
-      {
-        id: 3,
-        name: "Mark Brown",
-        username: "markb",
-        cheated: true,
-        behaviors: ["Using phone", "Looking at another student's screen"],
-      },
-      {
-        id: 4,
-        name: "Emma Watson",
-        username: "emmaw",
-        cheated: false,
-        behaviors: ["No suspicious activity"],
-      },
-    ],
-    3: [
-      // History Exam
-      {
-        id: 5,
-        name: "Michael Lee",
-        username: "michaell",
-        cheated: false,
-        behaviors: ["No suspicious activity"],
-      },
-      {
-        id: 6,
-        name: "Sara White",
-        username: "saraw",
-        cheated: true,
-        behaviors: ["Talking during exam", "Gaze on right frequently"],
-      },
-    ],
-  };
-
+  const [exams, setExams] = useState([]);
   const [selectedExam, setSelectedExam] = useState("");
   const [students, setStudents] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [behaviorImages, setBehaviorImages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingImages, setLoadingImages] = useState(false);
 
-  // Handle Exam Selection
-  const handleExamSelect = (e) => {
+  const instructorId = JSON.parse(localStorage.getItem("userData"))?.id;
+
+  useEffect(() => {
+    const fetchExams = async () => {
+      try {
+        const response = await axios.get(
+          `http://localhost:5000/api/exams-with-behavior?instructor_id=${instructorId}`
+        );
+        setExams(response.data);
+      } catch (err) {
+        toast.error("Failed to load exams with behavior data");
+      }
+    };
+
+    if (instructorId) {
+      fetchExams();
+    }
+  }, [instructorId]);
+
+  const handleExamSelect = async (e) => {
     const examId = e.target.value;
     setSelectedExam(examId);
-    setStudents(behaviorRecords[examId] || []); // Load student data
+    setLoading(true);
+    try {
+      const response = await axios.get(
+        `http://localhost:5000/api/exam-behavior/${examId}`
+      );
+      setStudents(response.data);
+    } catch (err) {
+      toast.error("Failed to load student behavior");
+    }
+    setLoading(false);
   };
 
-  // Open Modal to Show Detailed Behavior Logs
-  const handleViewBehavior = (student) => {
+  const handleViewBehavior = async (student) => {
     setSelectedStudent(student);
     setShowModal(true);
+    setLoadingImages(true);
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/api/behavior-images/${selectedExam}/${student.id}`
+      );
+      setBehaviorImages(res.data);
+    } catch (err) {
+      toast.error("Failed to load behavior images");
+    }
+    setLoadingImages(false);
   };
 
   return (
-    <Container className="mt-4">
-      <h2 className="mb-4">Student Behavior Monitoring</h2>
+    <Container className="py-4 px-3 px-md-5">
+      <ToastContainer />
+      <h2 className="mb-4 fw-bold">
+        <i className="bi bi-person-check-fill me-2"></i> Student Behavior
+        Monitoring
+      </h2>
 
-      {/* Step 1: Select Exam */}
-      <Form.Group className="mb-3">
-        <Form.Label>Select Exam</Form.Label>
-        <Form.Select value={selectedExam} onChange={handleExamSelect}>
-          <option value="">-- Select an Exam --</option>
+      <Form.Group controlId="examSelect" className="mb-4">
+        <Form.Label className="fw-bold text-dark">
+          <i className="bi bi-clipboard-check me-2"></i>Select an Exam
+        </Form.Label>
+        <Form.Select
+          value={selectedExam}
+          onChange={handleExamSelect}
+          className="shadow-sm border-primary"
+        >
+          <option value="">-- Choose from your created exams --</option>
           {exams.map((exam) => (
             <option key={exam.id} value={exam.id}>
               {exam.title}
@@ -103,47 +97,56 @@ const StudentBehavior = () => {
         </Form.Select>
       </Form.Group>
 
-      {/* Step 2: Show Student Behavior Records */}
-      {selectedExam && (
+      {loading ? (
+        <div className="text-center">
+          <Spinner animation="border" />
+        </div>
+      ) : selectedExam ? (
         <>
-          <h4 className="mt-4">
-            Exam: {exams.find((exam) => exam.id == selectedExam)?.title}
+          <h4 className="mt-4 text-primary">
+            <i className="bi bi-book me-2"></i>
+            Exam:{" "}
+            {exams.find((exam) => exam.id === parseInt(selectedExam))?.title}
           </h4>
           <Table striped bordered hover className="mt-3">
             <thead className="table-dark">
               <tr>
-                <th>ID</th>
+                <th>#</th>
                 <th>Name</th>
                 <th>Username</th>
-                <th>Cheated</th>
+                <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {students.length > 0 ? (
-                students.map((student) => (
+                students.map((student, index) => (
                   <tr
                     key={student.id}
                     className={student.cheated ? "table-danger" : ""}
                   >
-                    <td>{student.id}</td>
-                    <td>{student.name}</td>
-                    <td>{student.username}</td>
-                    <td>{student.cheated ? "Yes" : "No"}</td>
+                    <td>{index + 1}</td>
+                    <td className="text-dark">{student.name}</td>
+                    <td className="text-dark">@{student.username}</td>
+                    <td>
+                      <Badge bg={student.cheated ? "danger" : "success"}>
+                        {student.cheated ? "Cheated" : "Clean"}
+                      </Badge>
+                    </td>
                     <td>
                       <Button
-                        variant="info"
+                        variant="outline-info"
                         size="sm"
                         onClick={() => handleViewBehavior(student)}
                       >
-                        View Behavior
+                        <i className="bi bi-eye"></i> View Behavior
                       </Button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="text-center">
+                  <td colSpan="5" className="text-center text-muted">
                     No student records available for this exam.
                   </td>
                 </tr>
@@ -151,24 +154,63 @@ const StudentBehavior = () => {
             </tbody>
           </Table>
         </>
-      )}
+      ) : null}
 
-      {/* Modal to Show Detailed Behavior Logs */}
       {selectedStudent && (
-        <Modal show={showModal} onHide={() => setShowModal(false)}>
+        <Modal
+          show={showModal}
+          onHide={() => setShowModal(false)}
+          size="lg"
+          centered
+        >
           <Modal.Header closeButton>
-            <Modal.Title>Behavior Logs for {selectedStudent.name}</Modal.Title>
+            <Modal.Title>
+              <i className="bi bi-person-lines-fill me-2"></i>
+              Behavior Logs for {selectedStudent.name}
+            </Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            <ul>
-              {selectedStudent.behaviors.map((behavior, index) => (
-                <li key={index}>{behavior}</li>
+            {loadingImages && (
+              <div className="text-center">
+                <Spinner animation="border" />
+              </div>
+            )}
+            {!loadingImages && behaviorImages.length === 0 && (
+              <p className="text-muted">No behavior logs found.</p>
+            )}
+            <div className="row">
+              {behaviorImages.map((img, index) => (
+                <div className="col-md-6 mb-4" key={index}>
+                  <div className="card shadow-sm h-100">
+                    <img
+                      src={`data:image/jpeg;base64,${img.image_base64}`}
+                      alt={`Behavior ${index}`}
+                      className="card-img-top"
+                      style={{ maxHeight: "250px", objectFit: "cover" }}
+                    />
+                    <div className="card-body">
+                      <p className="mb-1 text-dark">
+                        <i className="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                        <strong>Warning:</strong> {img.warning_type}
+                      </p>
+                      <p className="text-dark mb-1">
+                        <i className="bi bi-cpu me-1"></i>
+                        <strong>AI:</strong>{" "}
+                        {img.classification_label || "Not yet classified"}
+                      </p>
+                      <p className="text-dark small mb-0">
+                        <i className="bi bi-clock me-1"></i>
+                        {new Date(img.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={() => setShowModal(false)}>
-              Close
+              <i className="bi bi-x-circle me-1"></i> Close
             </Button>
           </Modal.Footer>
         </Modal>

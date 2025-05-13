@@ -6,35 +6,49 @@ import {
   Modal,
   Table,
   Spinner,
+  Row,
+  Col,
+  InputGroup,
 } from "react-bootstrap";
 import axios from "axios";
-import { FaChalkboardTeacher, FaEdit, FaTrash } from "react-icons/fa";
+import { FaChalkboardTeacher, FaEdit, FaTrash, FaSearch } from "react-icons/fa";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 const ManageExam = () => {
   const [instructors, setInstructors] = useState([]);
+  const [filteredInstructors, setFilteredInstructors] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedInstructor, setSelectedInstructor] = useState("");
   const [exams, setExams] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [loadingExams, setLoadingExams] = useState(false);
 
-  // Edit modal state
   const [editModal, setEditModal] = useState(false);
   const [editExam, setEditExam] = useState({
     id: "",
     title: "",
     description: "",
+    exam_date: "",
+    start_time: "",
   });
 
   useEffect(() => {
     fetchInstructors();
   }, []);
 
+  useEffect(() => {
+    const filtered = instructors.filter((i) =>
+      (i.name + i.username).toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredInstructors(filtered);
+  }, [searchTerm, instructors]);
+
   const fetchInstructors = async () => {
     try {
       const res = await axios.get("http://localhost:5000/api/instructors");
       setInstructors(res.data);
+      setFilteredInstructors(res.data);
     } catch (err) {
       console.error("Failed to fetch instructors", err);
     }
@@ -51,6 +65,7 @@ const ManageExam = () => {
         `http://localhost:5000/api/exams/instructor/${instructorId}`
       );
       setExams(res.data);
+      console.log(res.data);
     } catch (err) {
       console.error("Failed to fetch exams", err);
     } finally {
@@ -76,6 +91,8 @@ const ManageExam = () => {
       id: exam.id,
       title: exam.title,
       description: exam.description,
+      exam_date: exam.exam_date || "",
+      start_time: exam.start_time?.substring(0, 5) || "", // ensures input shows HH:MM
     });
     setEditModal(true);
   };
@@ -85,16 +102,24 @@ const ManageExam = () => {
   };
 
   const handleUpdateExam = async () => {
-    try {
-      await axios.put(`http://localhost:5000/api/exams/${editExam.id}`, {
-        title: editExam.title,
-        description: editExam.description,
-      });
+    const updatedData = {
+      ...editExam,
+      start_time:
+        editExam.start_time.length === 5
+          ? `${editExam.start_time}:00`
+          : editExam.start_time,
+    };
 
+    console.log("Submitting update:", updatedData);
+
+    try {
+      await axios.put(
+        `http://localhost:5000/api/exams/${editExam.id}`,
+        updatedData
+      );
       toast.success("Exam updated successfully!");
       setEditModal(false);
 
-      // Refresh exams list
       const res = await axios.get(
         `http://localhost:5000/api/exams/instructor/${selectedInstructor}`
       );
@@ -113,6 +138,18 @@ const ManageExam = () => {
         Manage Instructor Exams
       </h3>
 
+      <InputGroup className="mb-3">
+        <InputGroup.Text>
+          <FaSearch />
+        </InputGroup.Text>
+        <Form.Control
+          type="text"
+          placeholder="Search instructor by name or username..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </InputGroup>
+
       <Form.Group controlId="instructorSelect" className="mb-4">
         <Form.Label>Select Instructor</Form.Label>
         <Form.Select
@@ -120,7 +157,7 @@ const ManageExam = () => {
           onChange={handleInstructorSelect}
         >
           <option value="">-- Choose Instructor --</option>
-          {instructors.map((instructor) => (
+          {filteredInstructors.map((instructor) => (
             <option key={instructor.id} value={instructor.id}>
               {instructor.name}
             </option>
@@ -150,6 +187,8 @@ const ManageExam = () => {
                 <tr>
                   <th>Title</th>
                   <th>Description</th>
+                  <th>Date</th>
+                  <th>Start Time</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -158,6 +197,8 @@ const ManageExam = () => {
                   <tr key={exam.id}>
                     <td>{exam.title}</td>
                     <td>{exam.description}</td>
+                    <td>{exam.exam_date || "N/A"}</td>
+                    <td>{exam.start_time || "N/A"}</td>
                     <td>
                       <Button
                         variant="outline-primary"
@@ -218,6 +259,30 @@ const ManageExam = () => {
                 onChange={handleEditChange}
               />
             </Form.Group>
+            <Row>
+              <Col>
+                <Form.Group className="mb-3">
+                  <Form.Label>Date</Form.Label>
+                  <Form.Control
+                    type="date"
+                    name="exam_date"
+                    value={editExam.exam_date}
+                    onChange={handleEditChange}
+                  />
+                </Form.Group>
+              </Col>
+              <Col>
+                <Form.Group className="mb-3">
+                  <Form.Label>Start Time</Form.Label>
+                  <Form.Control
+                    type="time"
+                    name="start_time"
+                    value={editExam.start_time}
+                    onChange={handleEditChange}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
           </Form>
         </Modal.Body>
         <Modal.Footer>

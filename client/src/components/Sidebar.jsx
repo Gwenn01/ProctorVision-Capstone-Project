@@ -8,6 +8,9 @@ const Sidebar = ({ role }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const userData = JSON.parse(localStorage.getItem("userData"));
+  const username = userData?.username || "Unknown";
+
   const handleLogout = () => {
     localStorage.removeItem("userData");
     localStorage.removeItem("token");
@@ -77,7 +80,18 @@ const Sidebar = ({ role }) => {
           style={{ width: "60px", height: "60px" }}
           className="mb-2"
         />
-        <h5 className="fw-bold mb-0">{panelTitle}</h5>
+        <div className="mt-2">
+          <h5 className="fw-bold mb-1 text-white">{panelTitle}</h5>
+          <div className="d-flex justify-content-center align-items-center gap-1">
+            <i className="bi bi-person-circle text-white fs-5"></i>
+            <span
+              className="text-white fst-italic"
+              style={{ fontSize: "0.9rem" }}
+            >
+              Welcome, <span className="fw-semibold">{username}</span>
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Menu Items */}

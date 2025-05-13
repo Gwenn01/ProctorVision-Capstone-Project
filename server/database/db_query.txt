@@ -66,6 +66,13 @@ SELECT * FROM exam_submissions;
 
 DELETE FROM suspicious_behavior_logs WHERE id = 1;
 
+CREATE TABLE student_profiles (
+  user_id VARCHAR(50) PRIMARY KEY,
+  course VARCHAR(100),
+  section VARCHAR(100),
+  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 
 
 

@@ -17,7 +17,7 @@ import StudentBehavior from "./InstructorDashboard/StudentBehavior";
 
 // Student Pages
 import TakeExam from "./StudentDashboard/TakeExam";
-import YourBehavior from "./StudentDashboard/YourBehavior";
+//import YourBehavior from "./StudentDashboard/YourBehavior";
 
 const Dashboard = () => {
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
@@ -85,7 +85,7 @@ const Dashboard = () => {
               <>
                 <Route path="/" element={<TakeExam />} />
                 <Route path="take-exam" element={<TakeExam />} />
-                <Route path="your-behavior" element={<YourBehavior />} />
+                {/* <Route path="your-behavior" element={<YourBehavior />} />*/}
               </>
             )}
 

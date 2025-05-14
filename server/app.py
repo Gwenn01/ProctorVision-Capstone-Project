@@ -40,6 +40,7 @@ from routes.behavior_routes import behavior_bp
 from routes.get_behavior_routes import get_behavior_bp
 from routes.classification_routes import classification_bp
 from routes.get_behavior_images import get_behavior_images_bp
+from routes.instructor_student_behavior import instructor_behavior_bp
 
 app.register_blueprint(create_account_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='/api')
@@ -56,6 +57,7 @@ app.register_blueprint(behavior_bp, url_prefix='/api')
 app.register_blueprint(get_behavior_bp, url_prefix='/api')
 app.register_blueprint(classification_bp, url_prefix='/api')
 app.register_blueprint(get_behavior_images_bp, url_prefix="/api")
+app.register_blueprint(instructor_behavior_bp, url_prefix="/api")
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -86,20 +86,30 @@ def remove_student_from_exam(exam_id, student_id):
 @exam_students_bp.route("/update-exams/<int:exam_id>", methods=["PUT"])
 def update_exam(exam_id):
     data = request.get_json()
-    print("🔍 Received data:", data)
 
     title = data.get("title")
     description = data.get("description")
     duration = int(data.get("duration_minutes")) if data.get("duration_minutes") else None
-
-    # Convert RFC 1123 date string to YYYY-MM-DD
     exam_date_raw = data.get("exam_date")
     start_time = data.get("start_time") or None
 
-    try:
-        # Convert to MySQL date format
-        exam_date = datetime.strptime(exam_date_raw, "%a, %d %b %Y %H:%M:%S %Z").strftime("%Y-%m-%d") if exam_date_raw else None
+    # Convert exam_date to YYYY-MM-DD
+    exam_date = None
+    if exam_date_raw:
+        try:
+            # Try ISO format first
+            exam_date = datetime.strptime(exam_date_raw, "%Y-%m-%d").strftime("%Y-%m-%d")
+        except ValueError:
+            try:
+                # Try RFC 1123 fallback
+                import email.utils
+                parsed_dt = email.utils.parsedate_to_datetime(exam_date_raw)
+                exam_date = parsed_dt.strftime("%Y-%m-%d")
+            except Exception as e:
+                print("⚠️ Date parsing failed:", str(e))
+                return jsonify({"error": "Invalid date format for exam_date"}), 400
 
+    try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
@@ -113,9 +123,11 @@ def update_exam(exam_id):
         """, (title, description, duration, exam_date, start_time, exam_id))
         conn.commit()
         return jsonify({"message": "Exam updated successfully."}), 200
+
     except Exception as e:
         print("Error during update:", str(e))
         return jsonify({"error": str(e)}), 500
+
     finally:
         if conn:
             conn.close()

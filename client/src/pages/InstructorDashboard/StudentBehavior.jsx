@@ -1,220 +1,364 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Container,
-  Table,
-  Button,
+  Card,
+  Row,
+  Col,
   Modal,
-  Form,
-  Badge,
   Spinner,
+  Table,
+  Image,
+  Button,
 } from "react-bootstrap";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
+import {
+  BsCalendarEvent,
+  BsClock,
+  BsCheckCircle,
+  BsBoxArrowInDownLeft,
+  BsExclamationTriangleFill,
+  BsCpuFill,
+} from "react-icons/bs";
 import "react-toastify/dist/ReactToastify.css";
 
 const StudentBehavior = () => {
   const [exams, setExams] = useState([]);
-  const [selectedExam, setSelectedExam] = useState("");
+  const [selectedExam, setSelectedExam] = useState(null);
   const [students, setStudents] = useState([]);
-  const [showModal, setShowModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [behaviorImages, setBehaviorImages] = useState([]);
+  const [behaviorLogs, setBehaviorLogs] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [loadingImages, setLoadingImages] = useState(false);
+  const [showCurrentExamModal, setShowCurrentExamModal] = useState(false);
+  const [showPastExamModal, setShowPastExamModal] = useState(false);
+  const [showBehaviorModal, setShowBehaviorModal] = useState(false);
 
   const instructorId = JSON.parse(localStorage.getItem("userData"))?.id;
 
   useEffect(() => {
     const fetchExams = async () => {
       try {
-        const response = await axios.get(
-          `http://localhost:5000/api/exams-with-behavior?instructor_id=${instructorId}`
+        setLoading(true);
+        const res = await axios.get(
+          `http://localhost:5000/api/exams-instructor/${instructorId}`
         );
-        setExams(response.data);
+        setExams(res.data);
       } catch (err) {
-        toast.error("Failed to load exams with behavior data");
+        toast.error("Failed to load exams");
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (instructorId) {
-      fetchExams();
-    }
+    if (instructorId) fetchExams();
   }, [instructorId]);
 
-  const handleExamSelect = async (e) => {
-    const examId = e.target.value;
-    setSelectedExam(examId);
-    setLoading(true);
-    try {
-      const response = await axios.get(
-        `http://localhost:5000/api/exam-behavior/${examId}`
-      );
-      setStudents(response.data);
-    } catch (err) {
-      toast.error("Failed to load student behavior");
-    }
-    setLoading(false);
+  const groupExams = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const past = [],
+      current = [],
+      upcoming = [];
+
+    exams.forEach((exam) => {
+      if (!exam.exam_date) return;
+      const examDate = new Date(exam.exam_date);
+      examDate.setHours(0, 0, 0, 0);
+
+      if (examDate < today) past.push(exam);
+      else if (examDate.getTime() === today.getTime()) current.push(exam);
+      else upcoming.push(exam);
+    });
+
+    return { past, current, upcoming };
   };
 
-  const handleViewBehavior = async (student) => {
-    setSelectedStudent(student);
-    setShowModal(true);
-    setLoadingImages(true);
+  const { past, current, upcoming } = groupExams();
+
+  const handleCurrentExamClick = async (exam) => {
+    setSelectedExam(exam);
+    setSelectedStudent(null);
     try {
       const res = await axios.get(
-        `http://localhost:5000/api/behavior-images/${selectedExam}/${student.id}`
+        `http://localhost:5000/api/exam-assigned-students/${exam.id}`
       );
-      setBehaviorImages(res.data);
+      setStudents(res.data);
+      setShowCurrentExamModal(true);
     } catch (err) {
-      toast.error("Failed to load behavior images");
+      toast.error("Failed to load current exam students");
     }
-    setLoadingImages(false);
+  };
+
+  const handlePastExamClick = async (exam) => {
+    setSelectedExam(exam);
+    setSelectedStudent(null);
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/api/exam-behavior/${exam.id}`
+      );
+      setStudents(res.data);
+      setShowPastExamModal(true);
+    } catch (err) {
+      toast.error("Failed to load past exam data");
+    }
+  };
+
+  const handleStudentClick = async (student) => {
+    setSelectedStudent(student);
+    const studentId = student.student_id || student.id;
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/api/behavior-images/${selectedExam.id}/${studentId}`
+      );
+      setBehaviorLogs(res.data);
+      setShowBehaviorModal(true);
+    } catch (err) {
+      toast.error("Failed to load behavior logs");
+    }
   };
 
   return (
-    <Container className="py-4 px-3 px-md-5">
+    <Container className="py-4">
       <ToastContainer />
-      <h2 className="mb-4 fw-bold">
-        <i className="bi bi-person-check-fill me-2"></i> Student Behavior
-        Monitoring
+      <h2 className="text-center fw-bold mb-4">
+        <BsCalendarEvent className="me-2" />
+        Student Behavior Overview
       </h2>
-
-      <Form.Group controlId="examSelect" className="mb-4">
-        <Form.Label className="fw-bold text-dark">
-          <i className="bi bi-clipboard-check me-2"></i>Select an Exam
-        </Form.Label>
-        <Form.Select
-          value={selectedExam}
-          onChange={handleExamSelect}
-          className="shadow-sm border-primary"
-        >
-          <option value="">-- Choose from your created exams --</option>
-          {exams.map((exam) => (
-            <option key={exam.id} value={exam.id}>
-              {exam.title}
-            </option>
-          ))}
-        </Form.Select>
-      </Form.Group>
 
       {loading ? (
         <div className="text-center">
           <Spinner animation="border" />
         </div>
-      ) : selectedExam ? (
-        <>
-          <h4 className="mt-4 text-primary">
-            <i className="bi bi-book me-2"></i>
-            Exam:{" "}
-            {exams.find((exam) => exam.id === parseInt(selectedExam))?.title}
-          </h4>
-          <Table striped bordered hover className="mt-3">
-            <thead className="table-dark">
-              <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Username</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.length > 0 ? (
-                students.map((student, index) => (
-                  <tr
-                    key={student.id}
-                    className={student.cheated ? "table-danger" : ""}
-                  >
-                    <td>{index + 1}</td>
-                    <td className="text-dark">{student.name}</td>
-                    <td className="text-dark">@{student.username}</td>
-                    <td>
-                      <Badge bg={student.cheated ? "danger" : "success"}>
-                        {student.cheated ? "Cheated" : "Clean"}
-                      </Badge>
+      ) : (
+        <Row>
+          {[
+            {
+              label: "Current Exams",
+              color: "success",
+              icon: <BsCheckCircle />,
+              data: current,
+            },
+            {
+              label: "Upcoming Exams",
+              color: "info",
+              icon: <BsClock />,
+              data: upcoming,
+            },
+            {
+              label: "Past Exams",
+              color: "secondary",
+              icon: <BsBoxArrowInDownLeft />,
+              data: past,
+            },
+          ].map((group, idx) => (
+            <Col md={4} key={idx}>
+              <Card className="shadow-sm mb-4 h-100">
+                <Card.Header className={`bg-${group.color} text-white fw-bold`}>
+                  {group.icon} {group.label}
+                </Card.Header>
+                <Card.Body
+                  className="overflow-auto"
+                  style={{ maxHeight: "400px" }}
+                >
+                  {group.data.length ? (
+                    group.data.map((exam) => (
+                      <Card
+                        key={exam.id}
+                        className="mb-2"
+                        onClick={() => {
+                          if (group.label === "Past Exams") {
+                            handlePastExamClick(exam);
+                          } else {
+                            handleCurrentExamClick(exam);
+                          }
+                        }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <Card.Body>
+                          <strong>{exam.title}</strong>
+                          <div className="text-muted small">
+                            {exam.exam_date}
+                          </div>
+                        </Card.Body>
+                      </Card>
+                    ))
+                  ) : (
+                    <p className="text-muted">No exams</p>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      )}
+
+      <Modal
+        show={showCurrentExamModal}
+        onHide={() => setShowCurrentExamModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            Students Taking Exam - {selectedExam?.title}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {students.length ? (
+            <Table striped hover responsive>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Username</th>
+                  <th>Is Logged In</th>
+                  <th>Taking Exam</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student.student_id}>
+                    <td>{student.name}</td>
+                    <td>{student.username}</td>
+                    <td
+                      className={
+                        student.is_login ? "text-success" : "text-danger"
+                      }
+                    >
+                      {student.is_login ? "Yes" : "No"}
+                    </td>
+                    <td
+                      className={
+                        student.is_taking_exam ? "text-success" : "text-danger"
+                      }
+                    >
+                      {student.is_taking_exam ? "Yes" : "No"}
                     </td>
                     <td>
                       <Button
-                        variant="outline-info"
+                        variant="outline-primary"
                         size="sm"
-                        onClick={() => handleViewBehavior(student)}
+                        onClick={() => handleStudentClick(student)}
                       >
-                        <i className="bi bi-eye"></i> View Behavior
+                        View Behavior
                       </Button>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="text-center text-muted">
-                    No student records available for this exam.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
-        </>
-      ) : null}
+                ))}
+              </tbody>
+            </Table>
+          ) : (
+            <p className="text-muted">No assigned students found.</p>
+          )}
+        </Modal.Body>
+      </Modal>
 
-      {selectedStudent && (
-        <Modal
-          show={showModal}
-          onHide={() => setShowModal(false)}
-          size="lg"
-          centered
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>
-              <i className="bi bi-person-lines-fill me-2"></i>
-              Behavior Logs for {selectedStudent.name}
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            {loadingImages && (
-              <div className="text-center">
-                <Spinner animation="border" />
-              </div>
-            )}
-            {!loadingImages && behaviorImages.length === 0 && (
-              <p className="text-muted">No behavior logs found.</p>
-            )}
-            <div className="row">
-              {behaviorImages.map((img, index) => (
-                <div className="col-md-6 mb-4" key={index}>
-                  <div className="card shadow-sm h-100">
-                    <img
-                      src={`data:image/jpeg;base64,${img.image_base64}`}
-                      alt={`Behavior ${index}`}
-                      className="card-img-top"
-                      style={{ maxHeight: "250px", objectFit: "cover" }}
+      <Modal
+        show={showPastExamModal}
+        onHide={() => setShowPastExamModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Past Exam - {selectedExam?.title}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {students.length ? (
+            <Table striped hover>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Username</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student.id}>
+                    <td>{student.name}</td>
+                    <td>{student.username}</td>
+                    <td>
+                      {student.cheated ? (
+                        <span className="text-danger fw-bold">Cheating</span>
+                      ) : (
+                        <span className="text-success">Normal</span>
+                      )}
+                    </td>
+                    <td>
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        onClick={() => handleStudentClick(student)}
+                      >
+                        View Behavior
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          ) : (
+            <p className="text-muted">No behavior data available.</p>
+          )}
+        </Modal.Body>
+      </Modal>
+
+      {/* Behavior Modal */}
+      <Modal
+        show={showBehaviorModal}
+        onHide={() => setShowBehaviorModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <BsBoxArrowInDownLeft className="me-2" />
+            Suspicious Behavior - {selectedStudent?.name} (
+            {selectedStudent?.username})
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {behaviorLogs.length ? (
+            <Row>
+              {behaviorLogs.map((log, idx) => (
+                <Col md={4} key={idx} className="mb-3">
+                  <Card className="shadow-sm border-danger">
+                    <Image
+                      src={`data:image/jpeg;base64,${log.image_base64}`}
+                      alt="Suspicious"
+                      fluid
                     />
-                    <div className="card-body">
-                      <p className="mb-1 text-dark">
-                        <i className="bi bi-exclamation-triangle-fill text-warning me-1"></i>
-                        <strong>Warning:</strong> {img.warning_type}
+                    <Card.Body>
+                      <p className="mb-2">
+                        <BsExclamationTriangleFill className="me-1 text-warning" />
+                        <strong>Type:</strong> {log.warning_type}
                       </p>
-                      <p className="text-dark mb-1">
-                        <i className="bi bi-cpu me-1"></i>
-                        <strong>AI:</strong>{" "}
-                        {img.classification_label || "Not yet classified"}
+                      <p className="mb-2">
+                        <BsCpuFill className="me-1 text-primary" />
+                        <strong>AI Classification:</strong>{" "}
+                        {log.classification_label}{" "}
+                        <span className="text-muted small">
+                          (Processed by AI model)
+                        </span>
                       </p>
-                      <p className="text-dark small mb-0">
-                        <i className="bi bi-clock me-1"></i>
-                        {new Date(img.timestamp).toLocaleString()}
+                      <p className="text-muted small mb-0">
+                        <BsClock className="me-1" />
+                        {new Date(log.timestamp).toLocaleString()}
                       </p>
-                    </div>
-                  </div>
-                </div>
+                    </Card.Body>
+                  </Card>
+                </Col>
               ))}
-            </div>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
-              <i className="bi bi-x-circle me-1"></i> Close
-            </Button>
-          </Modal.Footer>
-        </Modal>
-      )}
+            </Row>
+          ) : (
+            <p className="text-muted">
+              <BsCheckCircle className="me-2 text-success" />
+              No suspicious behavior detected by the AI model.
+            </p>
+          )}
+        </Modal.Body>
+      </Modal>
     </Container>
   );
 };

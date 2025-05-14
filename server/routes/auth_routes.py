@@ -48,13 +48,20 @@ def login():
         if user:
             stored_hash = str(user['password']).strip()
             if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+                if user['user_type'] == 'Student':
+                    cursor.execute(
+                        "UPDATE instructor_assignments SET is_login = 1 WHERE student_id = %s",
+                        (user['id'],)
+                    )
+                    conn.commit()
+
                 token = create_access_token(
                     identity=user['username'],
                     expires_delta=timedelta(days=1)
                 )
                 return jsonify({
                     "message": "Login successful",
-                    "id": user['id'], 
+                    "id": user['id'],
                     "username": user['username'],
                     "name": user['name'],
                     "role": user['user_type'],  # "Instructor" or "Student"
@@ -72,3 +79,27 @@ def login():
     finally:
         if 'conn' in locals():
             conn.close()
+            
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    try:
+        req_data = request.get_json()
+        student_id = req_data.get("student_id")
+
+        if not student_id:
+            return jsonify({"error": "Missing student_id"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE instructor_assignments SET is_login = 0 WHERE student_id = %s",
+            (student_id,)
+        )
+        conn.commit()
+        return jsonify({"message": "Logout successful"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'conn' in locals():
+            conn.close()
+

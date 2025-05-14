@@ -3,6 +3,7 @@ import { Nav } from "react-bootstrap";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import logo from "../assets/prmsu-logo.png";
+import axios from "axios";
 
 const Sidebar = ({ role }) => {
   const navigate = useNavigate();
@@ -11,7 +12,26 @@ const Sidebar = ({ role }) => {
   const userData = JSON.parse(localStorage.getItem("userData"));
   const username = userData?.username || "Unknown";
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const user = JSON.parse(localStorage.getItem("userData"));
+    const token = localStorage.getItem("token");
+
+    if (user?.role === "Student") {
+      try {
+        await axios.post(
+          "http://localhost:5000/api/logout",
+          { student_id: user.id },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      } catch (error) {
+        console.error("Logout API failed:", error);
+      }
+    }
+
     localStorage.removeItem("userData");
     localStorage.removeItem("token");
     localStorage.removeItem("isAuthenticated");

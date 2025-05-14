@@ -53,6 +53,21 @@ const StudentBehavior = () => {
     if (instructorId) fetchExams();
   }, [instructorId]);
 
+  useEffect(() => {
+    if (selectedExam && selectedExam.id) {
+      const interval = setInterval(() => {
+        axios
+          .get(
+            `http://localhost:5000/api/exam-assigned-students/${selectedExam.id}`
+          )
+          .then((res) => setStudents(res.data))
+          .catch((err) => console.error("Error fetching real-time updates"));
+      }, 5000); // every 5 seconds
+
+      return () => clearInterval(interval); // cleanup
+    }
+  }, [selectedExam]);
+
   const groupExams = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

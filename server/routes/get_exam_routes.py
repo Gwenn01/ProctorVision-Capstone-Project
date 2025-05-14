@@ -14,7 +14,7 @@ def get_exam():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         query = """
-            SELECT e.id, e.title, e.description, e.duration_minutes
+            SELECT e.id, e.title, e.description, e.duration_minutes, e.exam_date, e.start_time, e.exam_file
             FROM exams e
             JOIN exam_students es ON e.id = es.exam_id
             WHERE es.student_id = %s

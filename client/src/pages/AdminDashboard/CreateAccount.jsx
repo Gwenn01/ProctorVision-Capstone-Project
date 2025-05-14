@@ -76,6 +76,7 @@ const CreateAccount = () => {
   };
 
   const handleExcelSubmit = async () => {
+    setLoading(true);
     if (
       !excelMeta.course ||
       !excelMeta.year ||

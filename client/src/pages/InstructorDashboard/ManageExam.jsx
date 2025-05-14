@@ -3,230 +3,386 @@ import {
   Container,
   Table,
   Button,
-  Modal,
-  Card,
   Form,
-  Spinner,
+  Spinner as BS_Spinner,
+  Card,
+  Row,
+  Col,
 } from "react-bootstrap";
 import axios from "axios";
-import { ToastContainer, toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import Spinner from "../../components/Spinner";
 
-const ManageExam = () => {
-  const [exams, setExams] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [selectedExam, setSelectedExam] = useState(null);
+const ManageStudentEnroll = ({ instructorId }) => {
   const [enrolledStudents, setEnrolledStudents] = useState([]);
+  const [groupedEnrolled, setGroupedEnrolled] = useState([]);
   const [allStudents, setAllStudents] = useState([]);
-  const [selectedStudent, setSelectedStudent] = useState("");
+  const [filteredStudents, setFilteredStudents] = useState([]);
+  const [filters, setFilters] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const [selectedSection, setSelectedSection] = useState("");
+  const [selectedYear, setSelectedYear] = useState("");
+  const [selectedGroupView, setSelectedGroupView] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const instructorId = userData.id;
+  const [assigning, setAssigning] = useState(false);
+  const [viewing, setViewing] = useState(false);
 
   useEffect(() => {
-    const fetchExams = async () => {
-      try {
-        const res = await axios.get(
-          `http://localhost:5000/api/exams/${instructorId}`
-        );
-        setExams(res.data);
-      } catch (err) {
-        console.error("Failed to fetch exams", err);
-      }
-    };
-
-    if (instructorId) fetchExams();
+    if (instructorId) {
+      fetchAllStudents();
+      fetchEnrolledStudents();
+      fetchFilters();
+    }
   }, [instructorId]);
 
-  const fetchStudents = async (examId) => {
+  const fetchEnrolledStudents = async () => {
     try {
       setLoading(true);
-      const [enrolledRes, allRes] = await Promise.all([
-        axios.get(`http://localhost:5000/api/exam_students/${examId}`),
-        axios.get("http://localhost:5000/api/students"),
-      ]);
-      setEnrolledStudents(enrolledRes.data);
-      setAllStudents(allRes.data);
+      const res = await axios.get(
+        `http://localhost:5000/api/enrolled-students/${instructorId}`
+      );
+      setEnrolledStudents(res.data);
+      groupStudents(res.data);
     } catch (err) {
-      console.error("Failed to fetch students", err);
+      toast.error("Failed to load enrolled students.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleViewExam = (exam) => {
-    setSelectedExam(exam);
-    fetchStudents(exam.id);
-    setShowModal(true);
+  const groupStudents = (students) => {
+    const map = new Map();
+    students.forEach((s) => {
+      const key = `${s.course}||${s.year}||${s.section}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(s);
+    });
+    const result = Array.from(map.entries()).map(([key, list]) => {
+      const [course, year, section] = key.split("||");
+      return { course, year, section, students: list };
+    });
+    setGroupedEnrolled(result);
   };
 
-  const handleAddStudent = async () => {
-    // Check if student is already enrolled
-    const alreadyEnrolled = enrolledStudents.some(
-      (student) => student.id.toString() === selectedStudent.toString()
-    );
+  const fetchAllStudents = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/all-students");
+      setAllStudents(res.data);
+    } catch (err) {
+      toast.error("Failed to load all students.");
+    }
+  };
 
-    if (alreadyEnrolled) {
-      toast.warning("Student is already enrolled in this exam.");
+  const fetchFilters = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/student-filters");
+      setFilters(res.data); // [{ course, section, year }]
+    } catch (err) {
+      toast.error("Failed to load filter options.");
+    }
+  };
+
+  const availableCourses = [...new Set(filters.map((f) => f.course))];
+  const availableSections = [
+    ...new Set(
+      filters.filter((f) => f.course === selectedCourse).map((f) => f.section)
+    ),
+  ];
+  const availableYears = [
+    ...new Set(
+      filters
+        .filter(
+          (f) => f.course === selectedCourse && f.section === selectedSection
+        )
+        .map((f) => f.year)
+    ),
+  ];
+
+  const handleViewFiltered = () => {
+    if (!selectedCourse || !selectedSection || !selectedYear) {
+      toast.warn("Please select all fields.");
       return;
     }
-
-    try {
-      await axios.post(`http://localhost:5000/api/exam_students`, {
-        exam_id: selectedExam.id,
-        student_id: selectedStudent,
-      });
-      toast.success("Student added successfully");
-      fetchStudents(selectedExam.id);
-      setSelectedStudent(""); // reset dropdown
-    } catch (err) {
-      toast.error("Failed to add student");
-    }
+    const matches = allStudents.filter(
+      (s) =>
+        s.course === selectedCourse &&
+        s.section === selectedSection &&
+        s.year === selectedYear
+    );
+    setFilteredStudents(matches);
+    setViewing(true);
   };
 
-  const handleRemoveStudent = async (studentId) => {
+  const handleBulkAssign = async () => {
+    if (!selectedCourse || !selectedSection || !selectedYear) {
+      toast.warn("Please select all fields.");
+      return;
+    }
     try {
-      await axios.delete(
-        `http://localhost:5000/api/exam_students/${selectedExam.id}/${studentId}`
+      setAssigning(true);
+      const res = await axios.post(
+        "http://localhost:5000/api/assign-students-group",
+        {
+          instructor_id: instructorId,
+          course: selectedCourse,
+          section: selectedSection,
+          year: selectedYear,
+        }
       );
-      toast.success("Student removed successfully");
-      fetchStudents(selectedExam.id);
+
+      if (res.status === 201) {
+        toast.success("Students assigned successfully!");
+        fetchEnrolledStudents();
+        fetchAllStudents();
+        setFilteredStudents([]);
+        setViewing(false);
+      } else {
+        toast.warn(
+          res.data.message || "Some students may already be assigned."
+        );
+      }
     } catch (err) {
-      toast.error("Failed to remove student");
+      toast.error("Bulk assignment failed.");
+    } finally {
+      setAssigning(false);
     }
   };
 
   return (
     <Container fluid className="py-4 px-3 px-md-5">
-      <ToastContainer autoClose={3000} />
+      <ToastContainer autoClose={3000} position="top-right" />
       <h2 className="mb-4 fw-bold text-center text-md-start">
-        <i className="bi bi-journal-bookmark-fill me-2"></i>Manage Exams
+        <i className="bi bi-person-plus-fill me-2"></i>
+        Manage Student Enrollment
       </h2>
 
-      <Card className="shadow-sm border-0 p-3">
-        <div className="table-responsive">
-          <Table striped bordered hover className="align-middle mb-0">
-            <thead className="table-dark">
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Description</th>
-                <th>Duration</th>
-                <th className="text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {exams.length > 0 ? (
-                exams.map((exam) => (
-                  <tr key={exam.id}>
-                    <td>{exam.id}</td>
-                    <td>{exam.title}</td>
-                    <td>{exam.description}</td>
-                    <td>{exam.duration_minutes} minutes</td>
-                    <td className="text-center">
-                      <Button
-                        variant="info"
+      {/* Filter Assign Section */}
+      <Row className="justify-content-center mb-3">
+        <Col xs={12} md={10} lg={8}>
+          <Card className="shadow-sm border-0">
+            <Card.Body>
+              <h6 className="fw-bold mb-3">Assign by Course, Section & Year</h6>
+              <Row className="g-2 mb-2">
+                <Col>
+                  <Form.Select
+                    value={selectedCourse}
+                    onChange={(e) => {
+                      setSelectedCourse(e.target.value);
+                      setSelectedSection("");
+                      setSelectedYear("");
+                      setViewing(false);
+                    }}
+                  >
+                    <option value="">Select Course</option>
+                    {availableCourses.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Col>
+                <Col>
+                  <Form.Select
+                    value={selectedSection}
+                    onChange={(e) => {
+                      setSelectedSection(e.target.value);
+                      setSelectedYear("");
+                      setViewing(false);
+                    }}
+                    disabled={!selectedCourse}
+                  >
+                    <option value="">Select Section</option>
+                    {availableSections.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Col>
+                <Col>
+                  <Form.Select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    disabled={!selectedSection}
+                  >
+                    <option value="">Select Year</option>
+                    {availableYears.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Col>
+              </Row>
+              <div className="d-flex gap-2">
+                <Button variant="info" onClick={handleViewFiltered}>
+                  View Students
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleBulkAssign}
+                  disabled={
+                    assigning || !viewing || filteredStudents.length === 0
+                  }
+                >
+                  {assigning ? (
+                    <>
+                      <BS_Spinner
                         size="sm"
-                        onClick={() => handleViewExam(exam)}
-                      >
-                        <i className="bi bi-eye me-1"></i> View
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="text-center text-muted">
-                    No exams found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
+                        animation="border"
+                        className="me-1"
+                      />
+                      Assigning...
+                    </>
+                  ) : (
+                    "Assign All"
+                  )}
+                </Button>
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Filtered Students Table */}
+      {viewing && (
+        <Row className="justify-content-center mb-4">
+          <Col xs={12} md={10} lg={8}>
+            <Card className="shadow-sm border-0">
+              <Card.Body>
+                <h5 className="fw-semibold mb-3">Filtered Students</h5>
+                <div className="table-responsive">
+                  <Table bordered hover>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredStudents.length > 0 ? (
+                        filteredStudents.map((s) => (
+                          <tr key={s.id}>
+                            <td>{s.id}</td>
+                            <td>{s.name}</td>
+                            <td>{s.username}</td>
+                            <td>{s.email}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="4" className="text-center text-muted">
+                            No matching students found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </Table>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      )}
+
+      {/* Enrolled Grouped Table */}
+      {loading ? (
+        <div className="d-flex justify-content-center my-5">
+          <Spinner />
         </div>
-      </Card>
+      ) : (
+        <Card className="shadow-sm border-0 mt-4">
+          <Card.Body>
+            <h5 className="fw-semibold mb-3">Enrolled Groups</h5>
+            <div className="table-responsive">
+              <Table striped bordered hover>
+                <thead className="table-dark">
+                  <tr>
+                    <th>Course</th>
+                    <th>Year</th>
+                    <th>Section</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedEnrolled.length > 0 ? (
+                    groupedEnrolled.map((group, idx) => (
+                      <tr key={idx}>
+                        <td>{group.course}</td>
+                        <td>{group.year}</td>
+                        <td>{group.section}</td>
+                        <td className="text-center">
+                          <Button
+                            variant="info"
+                            size="sm"
+                            onClick={() => setSelectedGroupView(group)}
+                          >
+                            View Students
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="text-center text-muted">
+                        No enrolled student groups.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </Table>
+            </div>
+          </Card.Body>
+        </Card>
+      )}
 
-      {selectedExam && (
-        <Modal
-          show={showModal}
-          onHide={() => setShowModal(false)}
-          centered
-          size="lg"
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>
-              <i className="bi bi-info-circle me-2"></i>
-              Exam: {selectedExam.title}
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body style={{ maxHeight: "500px", overflowY: "auto" }}>
-            <p>
-              <strong>Description:</strong> {selectedExam.description}
-            </p>
-            <p>
-              <strong>Duration:</strong> {selectedExam.duration_minutes} minutes
-            </p>
-
-            <h5 className="mt-4">Enrolled Students</h5>
-            {loading ? (
-              <div className="text-center my-3">
-                <Spinner animation="border" variant="primary" />
-              </div>
-            ) : (
-              <div
-                className="mb-4"
-                style={{ maxHeight: "300px", overflowY: "auto" }}
-              >
-                <ul className="list-group">
-                  {enrolledStudents.map((student) => (
-                    <li
-                      key={student.id}
-                      className="list-group-item d-flex justify-content-between align-items-center"
-                    >
-                      <div>
-                        <div className="fw-bold">{student.name}</div>
-                        <div className="text-muted small">{student.email}</div>
-                      </div>
-                      <Button
-                        variant="outline-danger"
-                        size="sm"
-                        onClick={() => handleRemoveStudent(student.id)}
-                      >
-                        <i className="bi bi-x-circle me-1"></i>Remove
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <Form.Group controlId="addStudent" className="mt-3">
-              <Form.Label>Add Student</Form.Label>
-              <Form.Select
-                value={selectedStudent}
-                onChange={(e) => setSelectedStudent(e.target.value)}
-              >
-                <option value="">-- Select Student --</option>
-                {allStudents.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.email})
-                  </option>
-                ))}
-              </Form.Select>
+      {/* View Students in Group */}
+      {selectedGroupView && (
+        <Card className="shadow-sm border-0 mt-4">
+          <Card.Body>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="fw-semibold">
+                Students in {selectedGroupView.course} {selectedGroupView.year}{" "}
+                {selectedGroupView.section}
+              </h5>
               <Button
-                variant="success"
-                className="mt-2"
-                onClick={handleAddStudent}
-                disabled={!selectedStudent}
+                variant="secondary"
+                size="sm"
+                onClick={() => setSelectedGroupView(null)}
               >
-                Add Student
+                Close
               </Button>
-            </Form.Group>
-          </Modal.Body>
-        </Modal>
+            </div>
+            <div className="table-responsive">
+              <Table bordered hover>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedGroupView.students.map((s) => (
+                    <tr key={s.id}>
+                      <td>{s.id}</td>
+                      <td>{s.name}</td>
+                      <td>{s.username}</td>
+                      <td>{s.email}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          </Card.Body>
+        </Card>
       )}
     </Container>
   );
 };
 
-export default ManageExam;
+export default ManageStudentEnroll;

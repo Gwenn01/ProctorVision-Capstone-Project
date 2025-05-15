@@ -97,3 +97,15 @@ def get_student_exams(student_id):
     finally:
         if conn:
             conn.close()
+            
+# Flask Route Example
+@get_behavior_images_bp.route('/exam-submissions/<exam_id>', methods=['GET'])
+def get_exam_submissions(exam_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT user_id FROM exam_submissions WHERE exam_id = %s", (exam_id,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify([row["user_id"] for row in rows])
+

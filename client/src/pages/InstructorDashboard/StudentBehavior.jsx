@@ -21,6 +21,7 @@ import {
   BsCpuFill,
 } from "react-icons/bs";
 import "react-toastify/dist/ReactToastify.css";
+import "./../../styles/indicatior.css";
 
 const StudentBehavior = () => {
   const [exams, setExams] = useState([]);
@@ -54,26 +55,50 @@ const StudentBehavior = () => {
   }, [instructorId]);
 
   useEffect(() => {
+    let interval;
     if (selectedExam && selectedExam.id) {
-      const interval = setInterval(() => {
-        axios
-          .get(
-            `http://localhost:5000/api/exam-assigned-students/${selectedExam.id}`
-          )
-          .then((res) => setStudents(res.data))
-          .catch((err) => console.error("Error fetching real-time updates"));
-      }, 5000); // every 5 seconds
+      const fetchStudentsWithSubmissionStatus = async () => {
+        try {
+          const [studentRes, submittedRes] = await Promise.all([
+            axios.get(
+              `http://localhost:5000/api/exam-assigned-students/${selectedExam.id}`
+            ),
+            axios.get(
+              `http://localhost:5000/api/exam-submissions/${selectedExam.id}`
+            ),
+          ]);
 
-      return () => clearInterval(interval); // cleanup
+          const studentsData = studentRes.data;
+          const submittedIds = submittedRes.data;
+
+          const merged = studentsData.map((student) => ({
+            ...student,
+            has_submitted: submittedIds.includes(
+              student.student_id || student.id
+            ),
+          }));
+
+          setStudents(merged);
+        } catch (err) {
+          console.error("Real-time fetch error", err);
+        }
+      };
+
+      // Initial fetch immediately
+      fetchStudentsWithSubmissionStatus();
+
+      // Then set interval
+      interval = setInterval(fetchStudentsWithSubmissionStatus, 5000);
     }
+
+    return () => clearInterval(interval);
   }, [selectedExam]);
 
   const groupExams = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const past = [],
-      current = [],
-      upcoming = [];
+      current = [];
 
     exams.forEach((exam) => {
       if (!exam.exam_date) return;
@@ -82,22 +107,34 @@ const StudentBehavior = () => {
 
       if (examDate < today) past.push(exam);
       else if (examDate.getTime() === today.getTime()) current.push(exam);
-      else upcoming.push(exam);
     });
 
-    return { past, current, upcoming };
+    return { past, current };
   };
 
-  const { past, current, upcoming } = groupExams();
+  const { past, current } = groupExams();
 
   const handleCurrentExamClick = async (exam) => {
     setSelectedExam(exam);
     setSelectedStudent(null);
     try {
-      const res = await axios.get(
+      const studentRes = await axios.get(
         `http://localhost:5000/api/exam-assigned-students/${exam.id}`
       );
-      setStudents(res.data);
+      const studentsData = studentRes.data;
+
+      // Get submitted user_ids
+      const submittedRes = await axios.get(
+        `http://localhost:5000/api/exam-submissions/${exam.id}`
+      );
+      const submittedIds = submittedRes.data; // array of user_id
+
+      // Add `has_submitted` property to each student
+      const merged = studentsData.map((student) => ({
+        ...student,
+        has_submitted: submittedIds.includes(student.student_id || student.id),
+      }));
+      setStudents(merged);
       setShowCurrentExamModal(true);
     } catch (err) {
       toast.error("Failed to load current exam students");
@@ -152,12 +189,6 @@ const StudentBehavior = () => {
               color: "success",
               icon: <BsCheckCircle />,
               data: current,
-            },
-            {
-              label: "Upcoming Exams",
-              color: "info",
-              icon: <BsClock />,
-              data: upcoming,
             },
             {
               label: "Past Exams",
@@ -227,6 +258,7 @@ const StudentBehavior = () => {
                   <th>Username</th>
                   <th>Is Logged In</th>
                   <th>Taking Exam</th>
+                  <th>Submitted</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -235,20 +267,37 @@ const StudentBehavior = () => {
                   <tr key={student.student_id}>
                     <td>{student.name}</td>
                     <td>{student.username}</td>
-                    <td
-                      className={
-                        student.is_login ? "text-success" : "text-danger"
-                      }
-                    >
-                      {student.is_login ? "Yes" : "No"}
+                    <td>
+                      <span
+                        className={`status-indicator ${
+                          student.is_login ? "active" : "inactive"
+                        }`}
+                        title={student.is_login ? "Logged In" : "Not Logged In"}
+                      ></span>
                     </td>
-                    <td
-                      className={
-                        student.is_taking_exam ? "text-success" : "text-danger"
-                      }
-                    >
-                      {student.is_taking_exam ? "Yes" : "No"}
+                    <td>
+                      <span
+                        className={`status-indicator ${
+                          student.is_taking_exam ? "active" : "inactive"
+                        }`}
+                        title={
+                          student.is_taking_exam ? "Taking Exam" : "Not Taking"
+                        }
+                      ></span>
                     </td>
+                    <td>
+                      <span
+                        className={`status-indicator ${
+                          student.has_submitted
+                            ? "active submitted"
+                            : "inactive"
+                        }`}
+                        title={
+                          student.has_submitted ? "Submitted" : "Not Submitted"
+                        }
+                      ></span>
+                    </td>
+
                     <td>
                       <Button
                         variant="outline-primary"

@@ -29,7 +29,6 @@ const TakeExam = () => {
     const fetchExams = async () => {
       const userData = JSON.parse(localStorage.getItem("userData"));
       const studentId = userData?.id;
-
       try {
         const examsRes = await axios.get(
           `http://127.0.0.1:5000/api/get_exam?student_id=${studentId}`
@@ -74,6 +73,34 @@ const TakeExam = () => {
   }, [isTakingExam, timer]);
 
   useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const studentId = userData?.id;
+
+    const notifStart = async () => {
+      try {
+        await axios.post(
+          "http://127.0.0.1:5000/api/update_exam_status_start",
+          {
+            student_id: studentId,
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      } catch (err) {
+        console.error("Error updating start status:", err);
+      }
+    };
+
+    if (isTakingExam) {
+      notifStart(); //
+    }
+  }, [isTakingExam]); //
+  // FIXED: dependency array goes here
+
+  useEffect(() => {
     if (isTakingExam) {
       const interval = setInterval(async () => {
         try {
@@ -116,7 +143,25 @@ const TakeExam = () => {
   };
 
   const handleSubmitExam = async () => {
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const studentId = userData?.id;
     setIsSubmitting(true);
+    try {
+      await axios.post(
+        "http://127.0.0.1:5000/api/update_exam_status_submit",
+        {
+          student_id: studentId,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      toast.success("Exam submitted successfully!");
+    } catch (err) {
+      toast.error("Failed to submit exam.");
+    }
     try {
       const userData = JSON.parse(localStorage.getItem("userData"));
 

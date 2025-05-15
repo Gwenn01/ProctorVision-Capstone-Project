@@ -1,0 +1,35 @@
+.status-indicator {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  margin: auto;
+  animation: pulse 1.5s infinite ease-in-out;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
+  transition: background-color 0.3s ease;
+}
+
+.status-indicator.active {
+  background-color: #28a745; /* Green */
+}
+
+.status-indicator.inactive {
+  background-color: #dc3545; /* Red */
+  animation: none;
+}
+
+.status-indicator.submitted {
+  background-color: #0d6efd; /* Blue */
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+  }
+}

@@ -90,9 +90,9 @@ def classify_behavior_logs():
                 prediction = model.predict(image)
 
                 if prediction.shape[1] == 2:
-                    label = "Cheating" if prediction[0][1] > prediction[0][0] else "Not Cheating"
+                    label = "Cheating" if prediction[0][1] < prediction[0][0] else "Not Cheating"
                 else:
-                    label = "Cheating" if prediction[0][0] > 0.5 else "Not Cheating"
+                    label = "Cheating" if prediction[0][0] < 0.5 else "Not Cheating"
 
                 cursor2 = conn.cursor()
                 cursor2.execute("""

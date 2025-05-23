@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from database.connection import get_db_connection
+from datetime import datetime
 import traceback
 
 instructor_exam_bp = Blueprint("instructor_exam_bp", __name__)
@@ -77,16 +78,27 @@ def delete_exam(exam_id):
 # PUT /api/exams/<int:exam_id>
 @instructor_exam_bp.route("/exams/<int:exam_id>", methods=["PUT"])
 def update_exam(exam_id):
-    data = request.get_json()
-    title = data.get("title")
-    description = data.get("description")
-    exam_date = data.get("exam_date")
-    start_time = data.get("start_time")
-
-    if not title or not description:
-        return jsonify({"error": "Title and description are required"}), 400
-
     try:
+        data = request.get_json()
+        title = data.get("title")
+        description = data.get("description")
+        raw_exam_date = data.get("exam_date")
+        start_time = data.get("start_time")
+
+        # Log raw data
+        print(f"Received update for Exam ID {exam_id}:")
+        print(f"Title: {title}")
+        print(f"Description: {description}")
+        print(f"Raw Date: {raw_exam_date}")
+        print(f"Start Time: {start_time}")
+
+        # Convert exam_date to MySQL format (YYYY-MM-DD)
+        try:
+            exam_date = datetime.strptime(raw_exam_date, "%a, %d %b %Y %H:%M:%S %Z").strftime("%Y-%m-%d")
+        except ValueError:
+            # Try fallback if frontend sends ISO format (e.g., "2025-05-16")
+            exam_date = raw_exam_date
+
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
@@ -99,6 +111,7 @@ def update_exam(exam_id):
         """, (title, description, exam_date, start_time, exam_id))
         conn.commit()
         return jsonify({"message": "Exam updated successfully"}), 200
+
     except Exception as e:
         import traceback
         print("ERROR in update_exam:")

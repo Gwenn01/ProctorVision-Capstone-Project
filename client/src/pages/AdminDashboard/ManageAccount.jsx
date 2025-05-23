@@ -20,7 +20,6 @@ import {
   FaEnvelope,
 } from "react-icons/fa";
 import {
-  FaFilter,
   FaLayerGroup,
   FaGraduationCap,
   FaStream,

@@ -96,6 +96,10 @@ const ManageExam = () => {
     });
     setEditModal(true);
   };
+  const formatDate = (inputDate) => {
+    const date = new Date(inputDate);
+    return date.toISOString().split("T")[0]; // Outputs 'YYYY-MM-DD'
+  };
 
   const handleEditChange = (e) => {
     setEditExam({ ...editExam, [e.target.name]: e.target.value });
@@ -104,6 +108,7 @@ const ManageExam = () => {
   const handleUpdateExam = async () => {
     const updatedData = {
       ...editExam,
+      exam_date: formatDate(editExam.exam_date),
       start_time:
         editExam.start_time.length === 5
           ? `${editExam.start_time}:00`
@@ -118,6 +123,7 @@ const ManageExam = () => {
         updatedData
       );
       toast.success("Exam updated successfully!");
+      window.location.reload();
       setEditModal(false);
 
       const res = await axios.get(
@@ -266,7 +272,13 @@ const ManageExam = () => {
                   <Form.Control
                     type="date"
                     name="exam_date"
-                    value={editExam.exam_date}
+                    value={
+                      editExam.exam_date
+                        ? new Date(editExam.exam_date)
+                            .toISOString()
+                            .split("T")[0]
+                        : ""
+                    }
                     onChange={handleEditChange}
                   />
                 </Form.Group>

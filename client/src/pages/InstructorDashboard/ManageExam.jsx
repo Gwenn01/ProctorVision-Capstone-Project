@@ -110,6 +110,7 @@ const ManageExam = () => {
         }
       );
       toast.success("Exam updated successfully!");
+      window.location.reload();
     } catch (err) {
       toast.error("Failed to update exam.");
     }
@@ -239,7 +240,13 @@ const ManageExam = () => {
               <Form.Label>Exam Date</Form.Label>
               <Form.Control
                 type="date"
-                value={selectedExam.exam_date || ""}
+                value={
+                  selectedExam.exam_date
+                    ? new Date(selectedExam.exam_date)
+                        .toISOString()
+                        .split("T")[0]
+                    : ""
+                }
                 onChange={(e) =>
                   setSelectedExam({
                     ...selectedExam,

@@ -125,8 +125,8 @@ const ManageBehavior = () => {
             onChange={(e) => setFilters({ ...filters, course: e.target.value })}
           >
             <option value="">All Courses</option>
-            <option value="BSIT">BSIT</option>
-            <option value="BSCS">BSCS</option>
+            <option value="BS Information Technology">BSIT</option>
+            <option value="BS Computer Science">BSCS</option>
           </Form.Select>
         </Col>
         <Col md={2}>
@@ -151,6 +151,10 @@ const ManageBehavior = () => {
             <option value="">All Sections</option>
             <option value="A">Section A</option>
             <option value="B">Section B</option>
+            <option value="C">Section C</option>
+            <option value="D">Section D</option>
+            <option value="E">Section E</option>
+            <option value="F">Section F</option>
           </Form.Select>
         </Col>
         <Col md={2}>

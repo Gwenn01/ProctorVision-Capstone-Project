@@ -135,6 +135,12 @@ const CreateAccount = () => {
       setLoading(false); // stop the spinner if validation fails
       return;
     }
+    if (!/^(?=.*\d).{8,}$/.test(formData.password)) {
+      toast.error(
+        "Password must be at least 8 characters and contain a number."
+      );
+      return;
+    }
 
     try {
       const response = await fetch("http://localhost:5000/api/create_account", {
@@ -272,6 +278,9 @@ const CreateAccount = () => {
                         name="password"
                         value={formData.password}
                         onChange={handleChange}
+                        pattern="^(?=.*\d)[A-Za-z\d]{8,16}$"
+                        maxLength={16}
+                        title="Password must be at least 8 characters and contain at least one number"
                         required
                       />
                       <Button
@@ -374,9 +383,11 @@ const CreateAccount = () => {
                       <Form.Control
                         type={showPassword ? "text" : "password"}
                         name="password"
-                        placeholder="Enter password"
                         value={formData.password}
                         onChange={handleChange}
+                        pattern="^(?=.*\d)[A-Za-z\d]{8,16}$"
+                        maxLength={16}
+                        title="Password must be at least 8 characters and contain at least one number"
                         required
                       />
                       <Button

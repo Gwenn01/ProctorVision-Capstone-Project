@@ -23,7 +23,7 @@ def get_exams(instructor_id):
         print("Fetched Exams:", exams)
         return jsonify(exams), 200
     except Exception as e:
-        print("🔥 ERROR in GET /exams:", str(e))
+        print(" ERROR in GET /exams:", str(e))
         return jsonify({"error": str(e)}), 500
     finally:
         if conn:

@@ -59,6 +59,37 @@ def delete_user(user_id):
     finally:
         if conn:
             conn.close()
+        
+@manage_users_bp.route("/users/<int:user_id>", methods=["PUT"])
+def update_user(user_id):
+    data = request.get_json()
+    name = data.get("name")
+    username = data.get("username")
+    email = data.get("email")
+
+    if not name or not username or not email:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Update the users table
+        cursor.execute("""
+            UPDATE users
+            SET name = %s, username = %s, email = %s
+            WHERE id = %s
+        """, (name, username, email, user_id))
+        
+        conn.commit()
+
+        return jsonify({"message": "User updated successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
 
 
 

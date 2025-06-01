@@ -163,8 +163,8 @@ const ManageBehavior = () => {
             onChange={(e) => setFilters({ ...filters, status: e.target.value })}
           >
             <option value="">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
+            <option value="Regular">Regular</option>
+            <option value="Irregular">Irregular</option>
           </Form.Select>
         </Col>
         <Col md={4}>

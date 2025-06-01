@@ -8,6 +8,8 @@ import CreateAccount from "./AdminDashboard/CreateAccount";
 import ManageAccount from "./AdminDashboard/ManageAccount";
 import ManageAdminExam from "./AdminDashboard/ManageExam";
 import ManageBehavior from "./AdminDashboard/ManageBehavior";
+// gmail verification
+import VerifySuccess from "./VerifySuccess";
 
 // Instructor Pages
 import CreateExam from "./InstructorDashboard/CreateExam";
@@ -49,6 +51,9 @@ const Dashboard = () => {
         {/* Main content */}
         <Col className="py-3 px-4">
           <Routes>
+            {/* Public route (accessible without login) */}
+            <Route path="/verify-success" element={<VerifySuccess />} />
+
             {/* Admin Routes */}
             {role === "Admin" && (
               <>
@@ -85,7 +90,6 @@ const Dashboard = () => {
               <>
                 <Route path="/" element={<TakeExam />} />
                 <Route path="take-exam" element={<TakeExam />} />
-                {/* <Route path="your-behavior" element={<YourBehavior />} />*/}
               </>
             )}
 

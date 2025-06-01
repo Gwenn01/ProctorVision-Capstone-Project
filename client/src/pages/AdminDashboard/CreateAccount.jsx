@@ -28,6 +28,7 @@ import {
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import * as XLSX from "xlsx";
+import { sendVerificationEmail } from "./utils/sendEamail";
 
 const CreateAccount = () => {
   const [userType, setUserType] = useState(null);
@@ -77,6 +78,7 @@ const CreateAccount = () => {
 
   const handleExcelSubmit = async () => {
     setLoading(true);
+
     if (
       !excelMeta.course ||
       !excelMeta.year ||
@@ -84,12 +86,16 @@ const CreateAccount = () => {
       !excelMeta.status
     ) {
       toast.error("Please select all meta fields for Excel import.");
+      setLoading(false);
       return;
     }
+
     if (excelData.length === 0) {
       toast.error("No Excel data to submit.");
+      setLoading(false);
       return;
     }
+
     try {
       const response = await fetch(
         "http://localhost:5000/api/bulk_create_students",
@@ -99,9 +105,34 @@ const CreateAccount = () => {
           body: JSON.stringify({ students: excelData, meta: excelMeta }),
         }
       );
+
       const result = await response.json();
+
       if (response.ok) {
         toast.success(`${excelData.length} students imported successfully!`);
+
+        // Loop through each student to send a verification email
+        for (const student of result.created_students || []) {
+          const verifyLink = `http://localhost:5000/api/verify?token=${student.verify_token}`;
+
+          const emailSent = await sendVerificationEmail({
+            to_email: student.email,
+            to_name: student.name,
+            username: student.username,
+            password: student.password,
+            link: verifyLink,
+          });
+          if (emailSent) {
+            toast.success("Verification email sent!");
+          } else {
+            toast.error("Account created, but email failed to send.");
+          }
+
+          if (!emailSent) {
+            toast.warn(`Email failed for ${student.email}`);
+          }
+        }
+
         setExcelData([]);
       } else {
         toast.error(result.error || "Failed to import students.");
@@ -117,9 +148,7 @@ const CreateAccount = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setLoading(true);
 
-    // Only validate student fields if the user type is Student
     if (
       formData.name === "" ||
       formData.username === "" ||
@@ -132,13 +161,15 @@ const CreateAccount = () => {
           formData.status === ""))
     ) {
       toast.error("Please fill and select all fields.");
-      setLoading(false); // stop the spinner if validation fails
+      setLoading(false);
       return;
     }
+
     if (!/^(?=.*\d).{8,}$/.test(formData.password)) {
       toast.error(
         "Password must be at least 8 characters and contain a number."
       );
+      setLoading(false);
       return;
     }
 
@@ -148,9 +179,31 @@ const CreateAccount = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, userType }),
       });
+
       const result = await response.json();
+
       if (response.ok) {
         toast.success(result.message);
+
+        //  Generate frontend-side email verification link
+        const verifyLink = `http://localhost:5000/api/verify?token=${result.token}`;
+
+        //  Send email via EmailJS
+        const emailSent = await sendVerificationEmail({
+          to_email: formData.email,
+          to_name: formData.name,
+          username: formData.username,
+          password: formData.password,
+          link: verifyLink,
+        });
+
+        if (emailSent) {
+          toast.success("Verification email sent!");
+        } else {
+          toast.error("Account created, but email failed to send.");
+        }
+
+        // Reset form
         setFormData({
           name: "",
           username: "",

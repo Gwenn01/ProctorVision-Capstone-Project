@@ -47,15 +47,23 @@ def delete_user(user_id):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Optional: delete from student_profiles first to prevent foreign key constraint
+        # Remove related assignments
+        cursor.execute("DELETE FROM instructor_assignments WHERE student_id = %s", (user_id,))
+
+        # Optional: remove from student_profiles
         cursor.execute("DELETE FROM student_profiles WHERE user_id = %s", (user_id,))
 
-        # Then delete from users
+        # Then delete user
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         conn.commit()
+
         return jsonify({"message": "User deleted successfully"}), 200
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
     finally:
         if conn:
             conn.close()

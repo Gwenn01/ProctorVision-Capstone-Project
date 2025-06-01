@@ -3,6 +3,8 @@ from flask_jwt_extended import create_access_token
 from datetime import timedelta
 from database.connection import get_db_connection  
 import bcrypt  
+from routes.utils.email_utils import send_verification_email
+import uuid
 
 create_account_bp = Blueprint('create_account', __name__)
 
@@ -14,6 +16,7 @@ def create_account():
     if data["userType"].lower() == "student":
         required_fields += ["course", "section", "year", "status"]
 
+    # Validate required fields
     if not all(field in data and data[field] for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
 
@@ -21,30 +24,32 @@ def create_account():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Check for existing username/email
+        # Check for duplicate username or email
         cursor.execute("SELECT * FROM users WHERE username = %s OR email = %s", (data['username'], data['email']))
         if cursor.fetchone():
             return jsonify({"error": "Username or email already exists"}), 409
 
-        # Hash password
-        hashed_pw = bcrypt.hashpw(data["password"].encode('utf-8'), bcrypt.gensalt())
+        raw_password = data["password"]
+        hashed_pw = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt())
+        verify_token = str(uuid.uuid4())
 
-        # Insert user (let id auto-increment)
+        # Insert new user into the users table
         cursor.execute("""
-            INSERT INTO users (name, username, email, password, user_type)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO users (name, username, email, password, user_type, verify_token, is_verified)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             data["name"],
             data["username"],
             data["email"],
             hashed_pw,
-            data["userType"]
+            data["userType"],
+            verify_token,
+            False
         ))
 
-        # Get the auto-generated user ID
         new_user_id = cursor.lastrowid
 
-        # Insert into student_profiles if student
+        # If student, insert into student_profiles
         if data["userType"].lower() == "student":
             cursor.execute("""
                 INSERT INTO student_profiles (user_id, course, section, year, status)
@@ -60,11 +65,12 @@ def create_account():
         conn.commit()
         conn.close()
 
-        token = create_access_token(identity=data["username"], expires_delta=timedelta(days=1))
+        # Compose verification URL
+        verification_url = f"http://localhost:5000/api/verify?token={verify_token}"
 
         return jsonify({
-            "message": f"{data['userType']} account created successfully",
-            "token": token,
+            "message": "Account created successfully.",
+            "token": verify_token,  
             "user": {
                 "id": new_user_id,
                 "name": data["name"],
@@ -74,13 +80,15 @@ def create_account():
             }
         }), 201
 
+
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @create_account_bp.route("/bulk_create_students", methods=["POST"])
 def bulk_create_students():
     data = request.get_json()
-
     students = data.get("students", [])
     meta = data.get("meta", {})
 
@@ -95,31 +103,43 @@ def bulk_create_students():
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        created_students = []
+
         for student in students:
             name = student.get("name")
             username = student.get("username")
             email = student.get("email")
             raw_password = student.get("password")
 
+            # Skip if any essential field is missing
             if not all([name, username, email, raw_password]):
-                continue  # skip incomplete rows
+                continue
 
-            # Check for duplicates
+            # Skip if username or email already exists
             cursor.execute("SELECT * FROM users WHERE username = %s OR email = %s", (username, email))
             if cursor.fetchone():
-                continue  # skip duplicates
+                continue
 
-            # Hash password
             hashed_pw = bcrypt.hashpw(raw_password.encode("utf-8"), bcrypt.gensalt())
+            verify_token = str(uuid.uuid4())
 
-            # Insert into users
+            # Insert into users table
             cursor.execute("""
-                INSERT INTO users (name, username, email, password, user_type)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (name, username, email, hashed_pw, "Student"))
+                INSERT INTO users (name, username, email, password, user_type, verify_token, is_verified)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                name,
+                username,
+                email,
+                hashed_pw,
+                "Student",
+                verify_token,
+                False
+            ))
+
             user_id = cursor.lastrowid
 
-            # Insert into student_profiles
+            # Insert into student_profiles table
             cursor.execute("""
                 INSERT INTO student_profiles (user_id, course, section, year, status)
                 VALUES (%s, %s, %s, %s, %s)
@@ -131,9 +151,22 @@ def bulk_create_students():
                 meta["status"]
             ))
 
+            # Append student info to return for frontend email sending
+            created_students.append({
+                "name": name,
+                "email": email,
+                "username": username,
+                "password": raw_password,
+                "verify_token": verify_token
+            })
+
         conn.commit()
         conn.close()
-        return jsonify({"message": "Bulk student import successful!"}), 201
+
+        return jsonify({
+            "message": f"{len(created_students)} students added.",
+            "created_students": created_students
+        }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

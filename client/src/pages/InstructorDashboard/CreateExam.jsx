@@ -143,6 +143,7 @@ const CreateExam = () => {
         }
       );
       toast.success("Exam created successfully!");
+      window.location.reload();
       console.log("Exam Created:", res.data);
     } catch (err) {
       toast.error("Failed to save exam.");

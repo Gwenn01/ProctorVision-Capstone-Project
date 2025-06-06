@@ -8,6 +8,7 @@ import {
   Modal,
   Row,
   Col,
+  Alert,
 } from "react-bootstrap";
 import { toast } from "react-toastify";
 import Spinner from "../../components/Spinner"; // Adjust path if needed
@@ -56,14 +57,62 @@ const TakeExam = () => {
     setSelectedExam(exam);
   };
 
+  const formatTime = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+
+    if (h > 0) {
+      return `${h.toString().padStart(2, "0")}:${m
+        .toString()
+        .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    } else {
+      return `${m.toString().padStart(2, "0")}:${s
+        .toString()
+        .padStart(2, "0")}`;
+    }
+  };
+
+  // handle start exam
   const handleStartExam = () => {
     if (!selectedExam) {
       toast.warn("Please select an exam first!");
       return;
     }
+
+    const now = new Date();
+    const [hour, minute] = selectedExam.start_time.split(":").map(Number);
+    const startTime = new Date(selectedExam.exam_date);
+    startTime.setHours(hour, minute, 0, 0);
+
+    const endTime = new Date(startTime);
+    endTime.setMinutes(
+      endTime.getMinutes() + parseInt(selectedExam.duration_minutes)
+    );
+
+    if (now < startTime) {
+      toast.error("You can only start the exam at the scheduled time.");
+      return;
+    }
+
+    if (now > endTime) {
+      toast.error("The exam period has already ended.");
+      return;
+    }
+
+    //  All conditions passed — start exam
     setIsTakingExam(true);
     setTimer(selectedExam.duration_minutes * 60);
   };
+
+  // Helper function to format date
+  const getTodayDate = () =>
+    new Date().toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
 
   useEffect(() => {
     if (isTakingExam && timer > 0) {
@@ -109,6 +158,27 @@ const TakeExam = () => {
           );
 
           if (response.data.warning !== "Looking Forward") {
+            try {
+              const userData = JSON.parse(localStorage.getItem("userData"));
+              const studentId = userData?.id;
+
+              // Fetch instructor_id securely
+              const res = await axios.get(
+                `http://127.0.0.1:5000/api/get-instructor-id?student_id=${studentId}`
+              );
+              const instructorId = res.data.instructor_id;
+              // then increase the real time behavior cvount to show it into th instructor pages
+              await axios.post(
+                "http://127.0.0.1:5000/api/increment-suspicious",
+                {
+                  student_id: studentId,
+                  instructor_id: instructorId,
+                }
+              );
+              console.log("Suspicious count incremented.");
+            } catch (err) {
+              console.error("Failed to increment suspicious count", err);
+            }
             setWarningMessage(response.data.warning);
             setShowWarning(true);
 
@@ -146,6 +216,7 @@ const TakeExam = () => {
     const userData = JSON.parse(localStorage.getItem("userData"));
     const studentId = userData?.id;
     setIsSubmitting(true);
+    // real time update to the instructor pages
     try {
       await axios.post(
         "http://127.0.0.1:5000/api/update_exam_status_submit",
@@ -187,12 +258,30 @@ const TakeExam = () => {
     setIsSubmitting(false);
     setIsTakingExam(false);
   };
+  // function that auto change the status of student if they close the program
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const studentId = userData?.id;
 
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}:${secs < 10 ? "0" : ""}${secs}`;
-  };
+    const handleUnload = async () => {
+      if (studentId) {
+        await fetch("http://127.0.0.1:5000/api/logout-exam", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ student_id: studentId }),
+          keepalive: true, // ensures it fires even during page unload
+        });
+      }
+    };
+
+    window.addEventListener("beforeunload", handleUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+    };
+  }, []);
 
   return (
     <Container fluid className="py-4 px-3 px-md-5">
@@ -200,7 +289,9 @@ const TakeExam = () => {
         <i className="bi bi-journal-text me-2"></i>
         Take Exam
       </h2>
-
+      <Alert variant="info" className="text-center mb-4">
+        <strong>Today's Date:</strong> {getTodayDate()}
+      </Alert>
       {/* Warning Modal */}
       <Modal show={showWarning} onHide={() => setShowWarning(false)} centered>
         <Modal.Header closeButton>
@@ -229,16 +320,54 @@ const TakeExam = () => {
                   <Form.Select
                     onChange={handleExamSelect}
                     value={selectedExam ? selectedExam.id : ""}
+                    className="shadow-sm border-primary"
                   >
                     <option value="">-- Choose an Exam --</option>
                     {exams.length === 0 ? (
                       <option disabled>No available exams</option>
                     ) : (
-                      exams.map((exam) => (
-                        <option key={exam.id} value={exam.id}>
-                          {exam.title} ({exam.duration_minutes} min)
-                        </option>
-                      ))
+                      exams
+                        .filter((exam) => {
+                          const today = new Date().toISOString().split("T")[0];
+                          const examDate = new Date(exam.exam_date)
+                            .toISOString()
+                            .split("T")[0];
+                          return examDate === today;
+                        })
+                        .map((exam) => {
+                          // Format exam date
+                          const formattedDate = new Date(
+                            exam.exam_date
+                          ).toLocaleDateString("en-US", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          });
+
+                          // Format exam start time
+                          const [hour, minute] = exam.start_time
+                            .split(":")
+                            .map(Number);
+                          const timeDate = new Date();
+                          timeDate.setHours(hour, minute, 0);
+
+                          const formattedTime = timeDate.toLocaleTimeString(
+                            [],
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true,
+                            }
+                          );
+
+                          return (
+                            <option key={exam.id} value={exam.id}>
+                              {exam.title} • {formattedDate} @ {formattedTime} (
+                              {exam.duration_minutes} min)
+                            </option>
+                          );
+                        })
                     )}
                   </Form.Select>
                 </Form.Group>

@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from database.connection import get_db_connection
-from datetime import datetime, date, time, timedelta  # ✅ FIXED IMPORT
+from datetime import datetime, date, time, timedelta  
 
 get_exam_bp = Blueprint('get_exam', __name__)
 
@@ -86,7 +86,8 @@ def update_exam_status_submit():
         cursor.execute(
             """
             UPDATE instructor_assignments 
-            SET is_taking_exam = 0
+            SET is_taking_exam = 0,
+            suspicious_behavior_count = 0
             WHERE student_id = %s
             """,
             (student_id,)  #  FIXED tuple syntax
@@ -97,4 +98,73 @@ def update_exam_status_submit():
 
     except Exception as e:
         print("Error updating exam start status:", e)
+        return jsonify({"error": str(e)}), 500
+    
+
+@get_exam_bp.route("/logout-exam", methods=["POST"])
+def logout_exam():
+    data = request.get_json()
+    student_id = data.get("student_id")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE instructor_assignments
+            SET is_login = 0, is_taking_exam = 0
+            WHERE student_id = %s
+        """, (student_id,))
+        conn.commit()
+        return jsonify({"message": "Status reset on logout"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+    
+
+@get_exam_bp.route("/increment-suspicious", methods=["POST"])
+def increment_suspicious():
+    data = request.get_json()
+    student_id = data.get("student_id")
+    instructor_id = data.get("instructor_id")
+
+    if not student_id or not instructor_id:
+        return jsonify({"error": "Missing student_id or exam_id"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE instructor_assignments
+            SET suspicious_behavior_count = suspicious_behavior_count + 1
+            WHERE student_id = %s AND instructor_id = %s
+        """, (student_id, instructor_id))
+
+        conn.commit()
+        return jsonify({"message": "Suspicious behavior count updated."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+    
+@get_exam_bp.route("/get-instructor-id", methods=["GET"])
+def get_instructor_id():
+    student_id = request.args.get("student_id")
+    if not student_id:
+        return jsonify({"error": "Missing student_id"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT instructor_id FROM instructor_assignments WHERE student_id = %s LIMIT 1",
+            (student_id,)
+        )
+        result = cursor.fetchone()
+        if result:
+            return jsonify({"instructor_id": result[0]}), 200
+        else:
+            return jsonify({"error": "Instructor not found"}), 404
+    except Exception as e:
         return jsonify({"error": str(e)}), 500

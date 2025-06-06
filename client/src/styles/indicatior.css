@@ -21,6 +21,39 @@
 .status-indicator.submitted {
   background-color: #0d6efd; /* Blue */
 }
+.status-indicator {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin: 0 auto;
+}
+
+.status-indicator.low {
+  background-color: #28a745; /* Green */
+}
+
+.status-indicator.medium {
+  background-color: #ffc107; /* Yellow */
+}
+
+.status-indicator.high {
+  background-color: #dc3545; /* Red */
+}
+.status-indicator:hover::after {
+  content: attr(title);
+  position: absolute;
+  background: #333;
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 1000;
+}
 
 @keyframes pulse {
   0% {

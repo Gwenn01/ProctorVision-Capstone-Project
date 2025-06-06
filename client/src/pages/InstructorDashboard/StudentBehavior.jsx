@@ -67,7 +67,7 @@ const StudentBehavior = () => {
               `http://localhost:5000/api/exam-submissions/${selectedExam.id}`
             ),
           ]);
-
+          console.log(studentRes.data);
           const studentsData = studentRes.data;
           const submittedIds = submittedRes.data;
 
@@ -95,18 +95,37 @@ const StudentBehavior = () => {
   }, [selectedExam]);
 
   const groupExams = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
     const past = [],
       current = [];
 
     exams.forEach((exam) => {
-      if (!exam.exam_date) return;
-      const examDate = new Date(exam.exam_date);
-      examDate.setHours(0, 0, 0, 0);
+      if (!exam.exam_date || !exam.start_time || !exam.duration_minutes) return;
 
-      if (examDate < today) past.push(exam);
-      else if (examDate.getTime() === today.getTime()) current.push(exam);
+      // Combine exam_date and start_time
+      const [hour, minute] = exam.start_time.split(":").map(Number);
+      const startDateTime = new Date(exam.exam_date);
+      startDateTime.setHours(hour, minute, 0, 0);
+
+      const endDateTime = new Date(startDateTime);
+      endDateTime.setMinutes(
+        endDateTime.getMinutes() + parseInt(exam.duration_minutes)
+      );
+
+      // Classify exam based on full datetime
+      if (endDateTime < now) {
+        past.push({
+          ...exam,
+          startTimeObj: startDateTime,
+          endTimeObj: endDateTime,
+        });
+      } else if (startDateTime <= now && now <= endDateTime) {
+        current.push({
+          ...exam,
+          startTimeObj: startDateTime,
+          endTimeObj: endDateTime,
+        });
+      }
     });
 
     return { past, current };
@@ -168,6 +187,34 @@ const StudentBehavior = () => {
       toast.error("Failed to load behavior logs");
     }
   };
+  // Format date like: May 16, 2025
+  const formatDate = (date) =>
+    date.toLocaleDateString("en-US", {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+
+  // Format time range like: 07:00 AM - 07:20 AM
+  const formatTimeRange = (examDate, startTime, duration) => {
+    const [hour, minute] = startTime.split(":").map(Number);
+    const start = new Date(examDate);
+    start.setHours(hour, minute, 0, 0);
+
+    const end = new Date(start);
+    end.setMinutes(end.getMinutes() + parseInt(duration));
+
+    return `${start.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })} - ${end.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })}`;
+  };
 
   return (
     <Container className="py-4">
@@ -202,6 +249,8 @@ const StudentBehavior = () => {
                 <Card.Header className={`bg-${group.color} text-white fw-bold`}>
                   {group.icon} {group.label}
                 </Card.Header>
+
+                {/* Scrollable Body */}
                 <Card.Body
                   className="overflow-auto"
                   style={{ maxHeight: "400px" }}
@@ -212,18 +261,21 @@ const StudentBehavior = () => {
                         key={exam.id}
                         className="mb-2"
                         onClick={() => {
-                          if (group.label === "Past Exams") {
-                            handlePastExamClick(exam);
-                          } else {
-                            handleCurrentExamClick(exam);
-                          }
+                          group.label === "Past Exams"
+                            ? handlePastExamClick(exam)
+                            : handleCurrentExamClick(exam);
                         }}
                         style={{ cursor: "pointer" }}
                       >
                         <Card.Body>
                           <strong>{exam.title}</strong>
                           <div className="text-muted small">
-                            {exam.exam_date}
+                            {formatDate(new Date(exam.exam_date))} <br />
+                            {formatTimeRange(
+                              exam.exam_date,
+                              exam.start_time,
+                              exam.duration_minutes
+                            )}
                           </div>
                         </Card.Body>
                       </Card>
@@ -258,6 +310,7 @@ const StudentBehavior = () => {
                   <th>Username</th>
                   <th>Is Logged In</th>
                   <th>Taking Exam</th>
+                  <th>Suspicious Behavior Count</th>
                   <th>Submitted</th>
                   <th>Action</th>
                 </tr>
@@ -285,6 +338,10 @@ const StudentBehavior = () => {
                         }
                       ></span>
                     </td>
+                    <td className="text-center">
+                      {student.suspicious_behavior_count}
+                    </td>
+
                     <td>
                       <span
                         className={`status-indicator ${

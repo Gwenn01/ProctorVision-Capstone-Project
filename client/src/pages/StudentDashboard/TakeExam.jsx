@@ -24,6 +24,9 @@ const TakeExam = () => {
   const [showWarning, setShowWarning] = useState(false);
   const [showCapturedModal, setShowCapturedModal] = useState(false);
   const [classifiedLogs, setClassifiedLogs] = useState([]);
+  const [examText, setExamText] = useState("");
+
+  //handle the time duration and start and end of the exam
 
   // Fetch exams + filter out submitted
   useEffect(() => {
@@ -42,7 +45,6 @@ const TakeExam = () => {
         const availableExams = examsRes.data.filter(
           (exam) => !submittedIds.includes(exam.id)
         );
-
         setExams(availableExams);
       } catch (error) {
         console.error("Error fetching exams/submissions:", error);
@@ -51,6 +53,23 @@ const TakeExam = () => {
 
     fetchExams();
   }, []);
+  // handle the pdf or image of details exam
+  useEffect(() => {
+    if (selectedExam) {
+      const filename = selectedExam.exam_file
+        .replaceAll("\\", "/")
+        .split("/")
+        .pop();
+      axios
+        .get(`http://localhost:5000/api/exam_text/${filename}`)
+        .then((res) => {
+          setExamText(res.data.content);
+        })
+        .catch((err) => {
+          console.error("Failed to load exam text:", err);
+        });
+    }
+  }, [selectedExam]);
 
   const handleExamSelect = (e) => {
     const exam = exams.find((exam) => exam.id === parseInt(e.target.value));
@@ -102,7 +121,12 @@ const TakeExam = () => {
 
     //  All conditions passed — start exam
     setIsTakingExam(true);
-    setTimer(selectedExam.duration_minutes * 60);
+    // NEW: Calculate remaining time based on fixed end time
+    const remainingTimeInSeconds = Math.max(
+      0,
+      Math.floor((endTime - now) / 1000)
+    );
+    setTimer(remainingTimeInSeconds); //  Only what's left
   };
 
   // Helper function to format date
@@ -397,10 +421,15 @@ const TakeExam = () => {
 
                 <ProgressBar
                   animated
-                  now={(timer / (selectedExam.duration_minutes * 60)) * 100}
+                  now={
+                    ((selectedExam.duration_minutes * 60 - timer) /
+                      (selectedExam.duration_minutes * 60)) *
+                    100
+                  }
                   variant="danger"
                   className="my-3"
                 />
+
                 <p className="text-center text-danger fw-semibold fs-5">
                   Time Left: {formatTime(timer)}
                 </p>
@@ -413,6 +442,22 @@ const TakeExam = () => {
                     className="img-fluid rounded border"
                     style={{ maxWidth: "100%", height: "auto" }}
                   />
+                </div>
+
+                <div className="text-enter mt-4 px-4">
+                  <h5 className="fw-semibold mb-3">📝 Exam details</h5>
+                  <div
+                    style={{
+                      background: "#f9f9f9",
+                      padding: "20px",
+                      borderRadius: "8px",
+                      whiteSpace: "pre-wrap",
+                      lineHeight: "1.6",
+                      fontSize: "1rem",
+                    }}
+                  >
+                    {examText || "Loading exam content..."}
+                  </div>
                 </div>
 
                 <div className="d-flex justify-content-center mt-4">

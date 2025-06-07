@@ -8,7 +8,6 @@ manage_exam_routes = Blueprint('manage_exam_routes', __name__)
 def get_exams(instructor_id):
     conn = None 
     try:
-        print("Instructor ID received:", instructor_id)
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -20,7 +19,6 @@ def get_exams(instructor_id):
         """, (instructor_id,))
 
         exams = cursor.fetchall()
-        print("Fetched Exams:", exams)
         return jsonify(exams), 200
     except Exception as e:
         print(" ERROR in GET /exams:", str(e))

@@ -149,7 +149,10 @@ const ManageExam = () => {
                     <td>
                       {exam.exam_file ? (
                         <a
-                          href={`http://localhost:5000/${exam.exam_file}`}
+                          href={`http://localhost:5000/${exam.exam_file.replaceAll(
+                            "\\",
+                            "/"
+                          )}`}
                           target="_blank"
                           rel="noreferrer"
                         >

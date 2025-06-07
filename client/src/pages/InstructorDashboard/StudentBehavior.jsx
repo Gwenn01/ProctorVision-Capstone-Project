@@ -96,8 +96,9 @@ const StudentBehavior = () => {
 
   const groupExams = () => {
     const now = new Date();
-    const past = [],
-      current = [];
+    const todayDateStr = now.toISOString().split("T")[0]; // 'YYYY-MM-DD'
+    const past = [];
+    const current = [];
 
     exams.forEach((exam) => {
       if (!exam.exam_date || !exam.start_time || !exam.duration_minutes) return;
@@ -112,15 +113,18 @@ const StudentBehavior = () => {
         endDateTime.getMinutes() + parseInt(exam.duration_minutes)
       );
 
-      // Classify exam based on full datetime
-      if (endDateTime < now) {
-        past.push({
+      const examDateStr = startDateTime.toISOString().split("T")[0];
+
+      if (examDateStr === todayDateStr && now <= endDateTime) {
+        // Today’s exam and not yet finished
+        current.push({
           ...exam,
           startTimeObj: startDateTime,
           endTimeObj: endDateTime,
         });
-      } else if (startDateTime <= now && now <= endDateTime) {
-        current.push({
+      } else if (endDateTime < now) {
+        // Exam ended regardless of date
+        past.push({
           ...exam,
           startTimeObj: startDateTime,
           endTimeObj: endDateTime,

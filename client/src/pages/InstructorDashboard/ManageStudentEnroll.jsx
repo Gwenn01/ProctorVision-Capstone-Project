@@ -264,7 +264,6 @@ const ManageStudentEnroll = ({ instructorId }) => {
             <Table bordered hover>
               <thead>
                 <tr>
-                  <th>ID</th>
                   <th>Name</th>
                   <th>Username</th>
                   <th>Email</th>
@@ -274,7 +273,6 @@ const ManageStudentEnroll = ({ instructorId }) => {
                 {filteredStudents.length > 0 ? (
                   filteredStudents.map((s) => (
                     <tr key={s.id}>
-                      <td>{s.id}</td>
                       <td>{s.name}</td>
                       <td>{s.username}</td>
                       <td>{s.email}</td>

@@ -55,11 +55,12 @@ const TakeExam = () => {
   }, []);
   // handle the pdf or image of details exam
   useEffect(() => {
-    if (selectedExam) {
+    if (selectedExam && selectedExam.exam_file) {
       const filename = selectedExam.exam_file
         .replaceAll("\\", "/")
         .split("/")
         .pop();
+
       axios
         .get(`http://localhost:5000/api/exam_text/${filename}`)
         .then((res) => {
@@ -68,6 +69,8 @@ const TakeExam = () => {
         .catch((err) => {
           console.error("Failed to load exam text:", err);
         });
+    } else {
+      setExamText(""); // or some fallback if no file was uploaded
     }
   }, [selectedExam]);
 
@@ -282,6 +285,7 @@ const TakeExam = () => {
     setIsSubmitting(false);
     setIsTakingExam(false);
   };
+
   // function that auto change the status of student if they close the program
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("userData"));
@@ -353,13 +357,17 @@ const TakeExam = () => {
                       exams
                         .filter((exam) => {
                           const today = new Date().toISOString().split("T")[0];
-                          const examDate = new Date(exam.exam_date)
-                            .toISOString()
-                            .split("T")[0];
-                          return examDate === today;
+                          const examDate = exam.exam_date
+                            ? new Date(exam.exam_date)
+                                .toISOString()
+                                .split("T")[0]
+                            : null;
+
+                          return examDate === today && exam.start_time; //  check both
                         })
                         .map((exam) => {
-                          // Format exam date
+                          if (!exam.exam_date || !exam.start_time) return null; //  prevent nulls
+
                           const formattedDate = new Date(
                             exam.exam_date
                           ).toLocaleDateString("en-US", {
@@ -369,7 +377,6 @@ const TakeExam = () => {
                             year: "numeric",
                           });
 
-                          // Format exam start time
                           const [hour, minute] = exam.start_time
                             .split(":")
                             .map(Number);
@@ -444,21 +451,23 @@ const TakeExam = () => {
                   />
                 </div>
 
-                <div className="text-enter mt-4 px-4">
-                  <h5 className="fw-semibold mb-3">📝 Exam details</h5>
-                  <div
-                    style={{
-                      background: "#f9f9f9",
-                      padding: "20px",
-                      borderRadius: "8px",
-                      whiteSpace: "pre-wrap",
-                      lineHeight: "1.6",
-                      fontSize: "1rem",
-                    }}
-                  >
-                    {examText || "Loading exam content..."}
+                {examText && (
+                  <div className="text-enter mt-4 px-4">
+                    <h5 className="fw-semibold mb-3">📝 Exam details</h5>
+                    <div
+                      style={{
+                        background: "#f9f9f9",
+                        padding: "20px",
+                        borderRadius: "8px",
+                        whiteSpace: "pre-wrap",
+                        lineHeight: "1.6",
+                        fontSize: "1rem",
+                      }}
+                    >
+                      {examText || "Loading exam content..."}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="d-flex justify-content-center mt-4">
                   {isSubmitting ? (

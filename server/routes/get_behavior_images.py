@@ -39,23 +39,34 @@ def get_exam_behavior(exam_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+        
         cursor.execute("""
-            SELECT u.id, u.name, u.username,
-                   MAX(CASE WHEN sbl.classification_label = 'Cheating' THEN 1 ELSE 0 END) AS cheated
-            FROM exam_submissions es
-            JOIN users u ON es.user_id = u.id
-            LEFT JOIN suspicious_behavior_logs sbl
-                ON sbl.exam_id = es.exam_id AND sbl.user_id = es.user_id
-            WHERE es.exam_id = %s
-            GROUP BY u.id, u.name, u.username
-        """, (exam_id,))
+            SELECT 
+                u.id, 
+                u.name, 
+                u.username,
+                CASE 
+                    WHEN es.id IS NULL THEN 'Did Not Take Exam'
+                    WHEN MAX(CASE WHEN sbl.classification_label = 'Cheating' THEN 1 ELSE 0 END) = 1 THEN 'Cheated'
+                    ELSE 'Completed'
+                END AS exam_status
+            FROM exam_students exs
+            JOIN users u ON exs.student_id = u.id
+            LEFT JOIN exam_submissions es ON es.user_id = u.id AND es.exam_id = %s
+            LEFT JOIN suspicious_behavior_logs sbl ON sbl.user_id = u.id AND sbl.exam_id = %s
+            WHERE exs.exam_id = %s
+            GROUP BY u.id, u.name, u.username, es.id;
+        """, (exam_id, exam_id, exam_id))
+
         students = cursor.fetchall()
         return jsonify(students), 200
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
+
     finally:
-        if conn:
-            conn.close()
+        cursor.close()
+        conn.close()
 
 # Get all behavior images for a student in a specific exam
 @get_behavior_images_bp.route('/behavior-images/<int:exam_id>/<int:student_id>', methods=['GET'])

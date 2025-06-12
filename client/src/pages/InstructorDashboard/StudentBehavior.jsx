@@ -56,34 +56,36 @@ const StudentBehavior = () => {
 
   useEffect(() => {
     let interval;
-    if (selectedExam && selectedExam.id) {
-      const fetchStudentsWithSubmissionStatus = async () => {
-        try {
-          const [studentRes, submittedRes] = await Promise.all([
-            axios.get(
-              `http://localhost:5000/api/exam-assigned-students/${selectedExam.id}`
-            ),
-            axios.get(
-              `http://localhost:5000/api/exam-submissions/${selectedExam.id}`
-            ),
-          ]);
-          console.log(studentRes.data);
-          const studentsData = studentRes.data;
-          const submittedIds = submittedRes.data;
 
-          const merged = studentsData.map((student) => ({
-            ...student,
-            has_submitted: submittedIds.includes(
-              student.student_id || student.id
-            ),
-          }));
+    const fetchStudentsWithSubmissionStatus = async () => {
+      if (!selectedExam || !selectedExam.id) return;
+      try {
+        const [studentRes, submittedRes] = await Promise.all([
+          axios.get(
+            `http://localhost:5000/api/exam-assigned-students/${selectedExam.id}`
+          ),
+          axios.get(
+            `http://localhost:5000/api/exam-submissions/${selectedExam.id}`
+          ),
+        ]);
 
-          setStudents(merged);
-        } catch (err) {
-          console.error("Real-time fetch error", err);
-        }
-      };
+        const studentsData = studentRes.data;
+        const submittedIds = submittedRes.data;
 
+        const merged = studentsData.map((student) => ({
+          ...student,
+          has_submitted: submittedIds.includes(
+            student.student_id || student.id
+          ),
+        }));
+
+        setStudents(merged);
+      } catch (err) {
+        console.error("Real-time fetch error", err);
+      }
+    };
+
+    if (selectedExam && selectedExam.id && showCurrentExamModal) {
       // Initial fetch immediately
       fetchStudentsWithSubmissionStatus();
 
@@ -91,8 +93,10 @@ const StudentBehavior = () => {
       interval = setInterval(fetchStudentsWithSubmissionStatus, 5000);
     }
 
-    return () => clearInterval(interval);
-  }, [selectedExam]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [selectedExam, showCurrentExamModal]);
 
   const groupExams = () => {
     const now = new Date();
@@ -171,7 +175,17 @@ const StudentBehavior = () => {
       const res = await axios.get(
         `http://localhost:5000/api/exam-behavior/${exam.id}`
       );
-      setStudents(res.data);
+
+      const sortedStudents = res.data.sort((a, b) => {
+        const statusPriority = {
+          Cheated: 0,
+          Completed: 1,
+          "Did Not Take Exam": 2,
+        };
+        return statusPriority[a.exam_status] - statusPriority[b.exam_status];
+      });
+
+      setStudents(sortedStudents);
       setShowPastExamModal(true);
     } catch (err) {
       toast.error("Failed to load past exam data");
@@ -404,10 +418,12 @@ const StudentBehavior = () => {
                     <td>{student.name}</td>
                     <td>{student.username}</td>
                     <td>
-                      {student.cheated ? (
+                      {student.exam_status === "Did Not Take Exam" ? (
+                        <span className="text-muted">Did Not Take Exam</span>
+                      ) : student.exam_status === "Cheated" ? (
                         <span className="text-danger fw-bold">Cheating</span>
                       ) : (
-                        <span className="text-success">Normal</span>
+                        <span className="text-success">Completed</span>
                       )}
                     </td>
                     <td>

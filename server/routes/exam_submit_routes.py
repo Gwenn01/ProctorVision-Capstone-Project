@@ -24,7 +24,7 @@ def submit_exam():
         conn.commit()
         conn.close()
 
-        return jsonify({"message": "✅ Exam submission recorded."}), 200
+        return jsonify({"message": " Exam submission recorded."}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -100,6 +100,7 @@ const CreateExam = () => {
     }
 
     setEnrolledStudents([...enrolledStudents, student]);
+    toast.success(`Added students.`);
     setSelectedStudent("");
   };
 

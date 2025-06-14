@@ -53,12 +53,13 @@ const StudentBehavior = () => {
 
     if (instructorId) fetchExams();
   }, [instructorId]);
-
+  // intervals
   useEffect(() => {
     let interval;
 
     const fetchStudentsWithSubmissionStatus = async () => {
       if (!selectedExam || !selectedExam.id) return;
+
       try {
         const [studentRes, submittedRes] = await Promise.all([
           axios.get(
@@ -80,16 +81,40 @@ const StudentBehavior = () => {
         }));
 
         setStudents(merged);
+
+        // Now also check if exam officially ended — then reset behavior counts
+        const now = new Date();
+        const [hour, minute, second = 0] = selectedExam.start_time
+          .split(":")
+          .map(Number);
+        const startTime = new Date(selectedExam.exam_date);
+        startTime.setHours(hour, minute, second);
+
+        const endTime = new Date(startTime);
+        endTime.setMinutes(
+          endTime.getMinutes() + parseInt(selectedExam.duration_minutes)
+        );
+
+        if (now >= endTime) {
+          // Loop through students who haven’t submitted and reset status
+          const unsubmittedStudents = studentsData.filter(
+            (student) =>
+              !submittedIds.includes(student.student_id || student.id)
+          );
+
+          for (const student of unsubmittedStudents) {
+            await axios.post("http://127.0.0.1:5000/api/update_status_timeup", {
+              student_id: student.student_id || student.id,
+            });
+          }
+        }
       } catch (err) {
         console.error("Real-time fetch error", err);
       }
     };
 
     if (selectedExam && selectedExam.id && showCurrentExamModal) {
-      // Initial fetch immediately
       fetchStudentsWithSubmissionStatus();
-
-      // Then set interval
       interval = setInterval(fetchStudentsWithSubmissionStatus, 5000);
     }
 

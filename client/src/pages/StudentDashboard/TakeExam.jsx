@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Container,
   Card,
@@ -103,13 +103,20 @@ const TakeExam = () => {
     }
 
     const now = new Date();
-    const [hour, minute] = selectedExam.start_time.split(":").map(Number);
-    const startTime = new Date(selectedExam.exam_date);
-    startTime.setHours(hour, minute, 0, 0);
 
-    const endTime = new Date(startTime);
-    endTime.setMinutes(
-      endTime.getMinutes() + parseInt(selectedExam.duration_minutes)
+    // Parse start time (e.g., "11:30:00")
+    const [hour, minute, second = 0] = selectedExam.start_time
+      .split(":")
+      .map(Number);
+
+    // Construct full start datetime
+    const startTime = new Date(selectedExam.exam_date);
+    startTime.setHours(hour, minute, second, 0);
+
+    // Calculate end datetime using duration
+    const durationInMinutes = parseInt(selectedExam.duration_minutes);
+    const endTime = new Date(
+      startTime.getTime() + durationInMinutes * 60 * 1000
     );
 
     if (now < startTime) {
@@ -122,14 +129,12 @@ const TakeExam = () => {
       return;
     }
 
-    //  All conditions passed — start exam
+    //  Start exam and set remaining time
     setIsTakingExam(true);
-    // NEW: Calculate remaining time based on fixed end time
-    const remainingTimeInSeconds = Math.max(
-      0,
-      Math.floor((endTime - now) / 1000)
-    );
-    setTimer(remainingTimeInSeconds); //  Only what's left
+    const remainingTimeInSeconds = Math.floor((endTime - now) / 1000);
+    setTimer(Math.max(0, remainingTimeInSeconds));
+
+    toast.success("Exam started. Good luck!");
   };
 
   // Helper function to format date
@@ -230,47 +235,53 @@ const TakeExam = () => {
     }
   }, [isTakingExam, selectedExam]);
 
-  const fetchBehaviorLogs = async () => {
+  // fetch the caught behavior after submiting the exam
+  const fetchBehaviorLogs = useCallback(async () => {
     const userData = JSON.parse(localStorage.getItem("userData"));
+    if (!userData?.id || !selectedExam?.id) return;
+
     const response = await axios.get(
       `http://127.0.0.1:5000/api/get_behavior_logs?user_id=${userData.id}`
     );
+
     const logs = response.data.filter((log) => log.exam_id === selectedExam.id);
     setClassifiedLogs(logs.reverse());
-  };
+  }, [selectedExam]);
 
-  const handleSubmitExam = async () => {
+  // handle submit exam
+  const handleSubmitExam = useCallback(async () => {
+    if (isSubmitting) return;
+
     const userData = JSON.parse(localStorage.getItem("userData"));
     const studentId = userData?.id;
+
+    if (!studentId || !selectedExam?.id) {
+      toast.error("Missing exam or student information.");
+      return;
+    }
+
     setIsSubmitting(true);
-    // real time update to the instructor pages
+
     try {
       await axios.post(
         "http://127.0.0.1:5000/api/update_exam_status_submit",
-        {
-          student_id: studentId,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
+        { student_id: studentId },
+        { headers: { "Content-Type": "application/json" } }
       );
       toast.success("Exam submitted successfully!");
     } catch (err) {
       toast.error("Failed to submit exam.");
     }
-    try {
-      const userData = JSON.parse(localStorage.getItem("userData"));
 
+    try {
       await axios.post("http://127.0.0.1:5000/api/stop_camera");
       await axios.post("http://127.0.0.1:5000/api/classify_behavior_logs", {
-        user_id: userData.id,
+        user_id: studentId,
         exam_id: selectedExam.id,
       });
 
       await axios.post("http://127.0.0.1:5000/api/submit_exam", {
-        user_id: userData.id,
+        user_id: studentId,
         exam_id: selectedExam.id,
       });
 
@@ -282,11 +293,20 @@ const TakeExam = () => {
       console.error("Error during submission:", error);
       toast.error("Something went wrong while submitting the exam.");
     }
+
     setIsSubmitting(false);
     setIsTakingExam(false);
-  };
+  }, [isSubmitting, selectedExam, fetchBehaviorLogs]);
 
-  // function that auto change the status of student if they close the program
+  // handle the submit exam when its time up
+  useEffect(() => {
+    if (isTakingExam && timer === 0 && selectedExam?.id) {
+      handleSubmitExam();
+    }
+  }, [timer, isTakingExam, selectedExam, handleSubmitExam]);
+
+  /*
+  // function that auto logout and change the status of student if they close the program or refresh the page
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("userData"));
     const studentId = userData?.id;
@@ -310,6 +330,7 @@ const TakeExam = () => {
       window.removeEventListener("beforeunload", handleUnload);
     };
   }, []);
+  */
 
   return (
     <Container fluid className="py-4 px-3 px-md-5">

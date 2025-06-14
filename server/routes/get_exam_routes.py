@@ -86,8 +86,7 @@ def update_exam_status_submit():
         cursor.execute(
             """
             UPDATE instructor_assignments 
-            SET is_taking_exam = 0,
-            suspicious_behavior_count = 0
+            SET is_taking_exam = 0
             WHERE student_id = %s
             """,
             (student_id,)  #  FIXED tuple syntax
@@ -99,28 +98,6 @@ def update_exam_status_submit():
     except Exception as e:
         print("Error updating exam start status:", e)
         return jsonify({"error": str(e)}), 500
-    
-
-@get_exam_bp.route("/logout-exam", methods=["POST"])
-def logout_exam():
-    data = request.get_json()
-    student_id = data.get("student_id")
-
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE instructor_assignments
-            SET is_login = 0, is_taking_exam = 0
-            WHERE student_id = %s
-        """, (student_id,))
-        conn.commit()
-        return jsonify({"message": "Status reset on logout"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if conn:
-            conn.close()
     
 
 @get_exam_bp.route("/increment-suspicious", methods=["POST"])
@@ -146,6 +123,58 @@ def increment_suspicious():
         return jsonify({"message": "Suspicious behavior count updated."}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+ 
+
+@get_exam_bp.route('/update_status_timeup', methods=['POST'])
+def update_status_timeup():
+    data = request.get_json()
+    student_id = data.get("student_id")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            UPDATE instructor_assignments 
+            SET is_taking_exam = 0,
+                suspicious_behavior_count = 0
+            WHERE student_id = %s
+            """,
+            (student_id,)
+        )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"message": "Status reset due to time up"}), 200
+
+    except Exception as e:
+        print("Error in update_status_timeup:", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@get_exam_bp.route("/logout-exam", methods=["POST"])
+def logout_exam():
+    data = request.get_json()
+    student_id = data.get("student_id")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE instructor_assignments
+            SET is_login = 0, is_taking_exam = 0
+            WHERE student_id = %s
+        """, (student_id,))
+        conn.commit()
+        return jsonify({"message": "Status reset on logout"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
     
     
 @get_exam_bp.route("/get-instructor-id", methods=["GET"])

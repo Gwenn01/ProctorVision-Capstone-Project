@@ -149,6 +149,43 @@ const ManageStudentEnroll = ({ instructorId }) => {
       setAssigning(false);
     }
   };
+  // handleBulkUnassign
+  const handleBulkUnassign = async (group) => {
+    const { course, section, year } = group;
+
+    if (!course || !section || !year) {
+      toast.warn("Missing group details.");
+      return;
+    }
+
+    try {
+      setAssigning(true);
+      const res = await axios.post(
+        "http://localhost:5000/api/unassign-students-group",
+        {
+          instructor_id: instructorId,
+          course,
+          section,
+          year,
+        }
+      );
+
+      if (res.status === 200) {
+        toast.success("Students unassigned successfully!");
+        fetchEnrolledStudents();
+        fetchAllStudents();
+      } else {
+        toast.warn(
+          res.data.message || "Some students may not have been unassigned."
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Bulk unassignment failed.");
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   return (
     <Container fluid className="py-4 px-3 px-md-5">
@@ -320,26 +357,46 @@ const ManageStudentEnroll = ({ instructorId }) => {
                 </thead>
                 <tbody>
                   {groupedEnrolled.length > 0 ? (
-                    groupedEnrolled.map((group, idx) => (
-                      <tr key={idx}>
-                        <td>{group.course}</td>
-                        <td>{group.year}</td>
-                        <td>{group.section}</td>
-                        <td className="text-center">
-                          <Button
-                            variant="info"
-                            size="sm"
-                            onClick={() => setSelectedGroupView(group)}
-                          >
-                            View Students
-                          </Button>
-                        </td>
-                      </tr>
-                    ))
+                    [...groupedEnrolled]
+                      .sort((a, b) => {
+                        // Sort by year first (numerical comparison)
+                        if (a.year !== b.year) {
+                          return a.year - b.year;
+                        }
+                        // If year is the same, sort by section (alphabetically)
+                        return a.section.localeCompare(b.section);
+                      })
+                      .map((group, idx) => (
+                        <tr key={idx}>
+                          <td>{group.course}</td>
+                          <td>{group.year}</td>
+                          <td>{group.section}</td>
+                          <td className="text-center">
+                            <div className="d-flex justify-content-center gap-2">
+                              <Button
+                                variant="info"
+                                size="sm"
+                                onClick={() => setSelectedGroupView(group)}
+                                title="View assigned students"
+                              >
+                                View Students
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleBulkUnassign(group)}
+                                title="Remove this group assignment"
+                              >
+                                Remove Assign
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
                   ) : (
                     <tr>
                       <td colSpan="4" className="text-center text-muted">
-                        No enrolled student groups.
+                        No assigned groups found.
                       </td>
                     </tr>
                   )}
@@ -367,7 +424,6 @@ const ManageStudentEnroll = ({ instructorId }) => {
             <Table bordered hover>
               <thead>
                 <tr>
-                  <th>ID</th>
                   <th>Name</th>
                   <th>Username</th>
                   <th>Email</th>
@@ -376,7 +432,6 @@ const ManageStudentEnroll = ({ instructorId }) => {
               <tbody>
                 {selectedGroupView?.students.map((s) => (
                   <tr key={s.id}>
-                    <td>{s.id}</td>
                     <td>{s.name}</td>
                     <td>{s.username}</td>
                     <td>{s.email}</td>

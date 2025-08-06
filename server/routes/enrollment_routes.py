@@ -180,3 +180,54 @@ def assign_students_group():
     finally:
         if conn:
             conn.close()
+            
+            
+@enrollment_bp.route("/unassign-students-group", methods=["POST"])
+def unassign_students_group():
+    data = request.get_json()
+    instructor_id = data.get("instructor_id")
+    course = data.get("course")
+    section = data.get("section")
+    year = data.get("year")
+
+    if not all([instructor_id, course, section, year]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get all student IDs matching the group
+        cursor.execute("""
+            SELECT u.id FROM users u
+            JOIN student_profiles sp ON u.id = sp.user_id
+            WHERE sp.course = %s AND sp.section = %s AND sp.year = %s
+              AND u.user_type = 'Student'
+        """, (course, section, year))
+        students = cursor.fetchall()
+
+        if not students:
+            return jsonify({"message": "No students found for this group."}), 200
+
+        unassigned = 0
+        for s in students:
+            student_id = s["id"]
+
+            # Delete from assignments if exists
+            cursor.execute("""
+                DELETE FROM instructor_assignments
+                WHERE instructor_id = %s AND student_id = %s
+            """, (instructor_id, student_id))
+            unassigned += cursor.rowcount
+
+        conn.commit()
+        return jsonify({"message": f"{unassigned} students unassigned."}), 200
+
+    except Exception as e:
+        print("Error in /unassign-students-group:", e)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+

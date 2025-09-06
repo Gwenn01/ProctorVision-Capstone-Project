@@ -53,7 +53,8 @@ const StudentBehavior = () => {
 
     if (instructorId) fetchExams();
   }, [instructorId]);
-  // intervals
+
+  // if the exam ended change the status of student the suspicius behavior
   useEffect(() => {
     let interval;
 
@@ -83,19 +84,49 @@ const StudentBehavior = () => {
         setStudents(merged);
 
         // Now also check if exam officially ended — then reset behavior counts
+        // --- Build start & end times robustly ---
         const now = new Date();
-        const [hour, minute, second = 0] = selectedExam.start_time
-          .split(":")
-          .map(Number);
-        const startTime = new Date(selectedExam.exam_date);
-        startTime.setHours(hour, minute, second);
 
-        const endTime = new Date(startTime);
-        endTime.setMinutes(
-          endTime.getMinutes() + parseInt(selectedExam.duration_minutes)
+        const toStartDate = (dateStr, timeStr) => {
+          const d = new Date(dateStr); // local date at 00:00
+          if (Number.isNaN(d.getTime())) return null;
+
+          let h = 0,
+            m = 0,
+            s = 0;
+          if (/am|pm/i.test(timeStr)) {
+            // 12-hour format
+            const [hh, mm, ss = "0"] = timeStr
+              .replace(/\s?(AM|PM)/i, "")
+              .split(":");
+            h = parseInt(hh, 10);
+            m = parseInt(mm, 10);
+            s = parseInt(ss, 10);
+            const isPM = /pm/i.test(timeStr);
+            if (isPM && h < 12) h += 12;
+            if (!isPM && h === 12) h = 0;
+          } else {
+            // 24-hour format
+            const [HH, MM, SS = "0"] = timeStr.split(":");
+            h = parseInt(HH, 10);
+            m = parseInt(MM, 10);
+            s = parseInt(SS, 10);
+          }
+
+          d.setHours(h, m, s, 0);
+          return d;
+        };
+
+        const startTime = toStartDate(
+          selectedExam.exam_date,
+          selectedExam.start_time
         );
+        const durationMin = Number(selectedExam.duration_minutes || 0);
+        const endTime = startTime
+          ? new Date(startTime.getTime() + durationMin * 60_000)
+          : null;
 
-        if (now >= endTime) {
+        if (startTime && endTime && now >= endTime) {
           // Loop through students who haven’t submitted and reset status
           const unsubmittedStudents = studentsData.filter(
             (student) =>
@@ -500,11 +531,19 @@ const StudentBehavior = () => {
                         <BsExclamationTriangleFill className="me-1 text-warning" />
                         <strong>Type:</strong> {log.warning_type}
                       </p>
-                      <p className="mb-2">
+
+                      <p
+                        className={`mb-2 ${
+                          log.classification_label === "Cheating"
+                            ? "text-danger"
+                            : "text-success"
+                        }`}
+                      >
                         <BsCpuFill className="me-1 text-primary" />
                         <strong>AI Classification:</strong>{" "}
-                        {log.classification_label}{" "}
+                        {log.classification_label}
                       </p>
+
                       <p className="text-muted small mb-0">
                         <BsClock className="me-1" />
                         {new Date(log.timestamp).toLocaleString()}

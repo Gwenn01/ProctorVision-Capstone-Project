@@ -504,9 +504,6 @@ const StudentBehavior = () => {
                         <BsCpuFill className="me-1 text-primary" />
                         <strong>AI Classification:</strong>{" "}
                         {log.classification_label}{" "}
-                        <span className="text-muted small">
-                          (Processed by AI model)
-                        </span>
                       </p>
                       <p className="text-muted small mb-0">
                         <BsClock className="me-1" />

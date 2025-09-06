@@ -62,6 +62,21 @@ const ManageExam = () => {
     setShowModal(true);
   };
 
+  const handleDeleteExam = async (exam) => {
+    const examId = exam.id;
+
+    if (window.confirm("Are you sure you want to delete this exam?")) {
+      try {
+        await axios.delete(`http://localhost:5000/api/exams/${examId}`);
+        setExams((prev) => prev.filter((e) => e.id !== examId));
+        toast.success("Exam deleted successfully");
+      } catch (err) {
+        console.error("Failed to delete exam", err);
+        toast.error("Failed to delete exam.");
+      }
+    }
+  };
+
   const handleAddStudent = async () => {
     const alreadyEnrolled = enrolledStudents.some(
       (student) => student.id.toString() === selectedStudent.toString()
@@ -163,13 +178,23 @@ const ManageExam = () => {
                       )}
                     </td>
                     <td className="text-center">
-                      <Button
-                        variant="info"
-                        size="sm"
-                        onClick={() => handleViewExam(exam)}
-                      >
-                        <i className="bi bi-eye me-1"></i> View
-                      </Button>
+                      <div className="d-flex justify-content-center gap-2">
+                        <Button
+                          variant="info"
+                          size="sm"
+                          onClick={() => handleViewExam(exam)}
+                        >
+                          <i className="bi bi-eye me-1"></i> View
+                        </Button>
+
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleDeleteExam(exam)}
+                        >
+                          <i className="bi bi-trash me-1"></i> Delete
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Container,
   Card,
@@ -11,8 +11,15 @@ import {
   Alert,
 } from "react-bootstrap";
 import { toast } from "react-toastify";
-import Spinner from "../../components/Spinner"; // Adjust path if needed
+import Spinner from "../../components/Spinner";
 import axios from "axios";
+
+import {
+  startProctoringWebRTC,
+  stopProctoringWebRTC,
+} from "../../utils/proctorRTC";
+
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
 
 const TakeExam = () => {
   const [exams, setExams] = useState([]);
@@ -26,7 +33,120 @@ const TakeExam = () => {
   const [classifiedLogs, setClassifiedLogs] = useState([]);
   const [examText, setExamText] = useState("");
 
-  //handle the time duration and start and end of the exam
+  // Local camera preview
+  const videoPreviewRef = useRef(null);
+
+  // HUD overlay (badge in top-left of the video)
+  const overlayRef = useRef(null);
+
+  // Audio: one-shot beep + continuous alarm (both use /beep.wav)
+  const beepRef = useRef(null); // one-shot
+  const alarmRef = useRef(null); // continuous loop for "No Face"
+  const audioCtxRef = useRef(null); // Web Audio fallback
+  const prevWarnRef = useRef("Looking Forward");
+  const noFaceActiveRef = useRef(false);
+
+  const [lastCaptureAt, setLastCaptureAt] = useState(0);
+
+  // ---- helpers: one-shot beep (audio element first, then Web Audio fallback) ----
+  const playBeep = useCallback(async () => {
+    if (beepRef.current) {
+      try {
+        beepRef.current.currentTime = 0;
+        await beepRef.current.play();
+        return;
+      } catch {
+        /* fall back below */
+      }
+    }
+    try {
+      if (!audioCtxRef.current) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        audioCtxRef.current = new AC();
+      }
+      if (audioCtxRef.current.state === "suspended") {
+        await audioCtxRef.current.resume();
+      }
+      const ctx = audioCtxRef.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.2);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // ---- helpers: start/stop continuous alarm for "No Face" ----
+  const startNoFaceAlarm = useCallback(async () => {
+    if (noFaceActiveRef.current) return; // already playing
+    noFaceActiveRef.current = true;
+
+    if (alarmRef.current) {
+      try {
+        alarmRef.current.loop = true;
+        alarmRef.current.currentTime = 0;
+        await alarmRef.current.play();
+        return;
+      } catch {
+        /* fallback below */
+      }
+    }
+    // Web Audio fallback (sustained tone until stopped)
+    try {
+      if (!audioCtxRef.current) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        audioCtxRef.current = new AC();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") await ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 700;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      // store on ref so we can stop it later
+      alarmRef.current = { __osc: osc, __gain: gain, __webAudio: true };
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const stopNoFaceAlarm = useCallback(() => {
+    if (!noFaceActiveRef.current) return;
+    noFaceActiveRef.current = false;
+
+    const a = alarmRef.current;
+    if (!a) return;
+
+    // If it's an <audio> element
+    if (a.tagName === "AUDIO") {
+      try {
+        a.pause();
+        a.currentTime = 0;
+        a.loop = false;
+      } catch {}
+      return;
+    }
+
+    // If it's a Web Audio oscillator fallback
+    if (a.__webAudio && a.__osc) {
+      try {
+        a.__osc.stop();
+      } catch {}
+      alarmRef.current = null;
+    }
+  }, []);
 
   // Fetch exams + filter out submitted
   useEffect(() => {
@@ -35,12 +155,11 @@ const TakeExam = () => {
       const studentId = userData?.id;
       try {
         const examsRes = await axios.get(
-          `http://127.0.0.1:5000/api/get_exam?student_id=${studentId}`
+          `${API_BASE}/api/get_exam?student_id=${studentId}`
         );
         const submissionsRes = await axios.get(
-          `http://127.0.0.1:5000/api/get_exam_submissions?user_id=${studentId}`
+          `${API_BASE}/api/get_exam_submissions?user_id=${studentId}`
         );
-
         const submittedIds = submissionsRes.data.map((s) => s.exam_id);
         const availableExams = examsRes.data.filter(
           (exam) => !submittedIds.includes(exam.id)
@@ -53,67 +172,53 @@ const TakeExam = () => {
 
     fetchExams();
   }, []);
-  // handle the pdf or image of details exam
+
+  // Load exam text
   useEffect(() => {
     if (selectedExam && selectedExam.exam_file) {
       const filename = selectedExam.exam_file
         .replaceAll("\\", "/")
         .split("/")
         .pop();
-
       axios
-        .get(`http://localhost:5000/api/exam_text/${filename}`)
-        .then((res) => {
-          setExamText(res.data.content);
-        })
-        .catch((err) => {
-          console.error("Failed to load exam text:", err);
-        });
+        .get(`${API_BASE}/api/exam_text/${filename}`)
+        .then((res) => setExamText(res.data.content))
+        .catch((err) => console.error("Failed to load exam text:", err));
     } else {
-      setExamText(""); // or some fallback if no file was uploaded
+      setExamText("");
     }
   }, [selectedExam]);
 
   const handleExamSelect = (e) => {
-    const exam = exams.find((exam) => exam.id === parseInt(e.target.value));
-    setSelectedExam(exam);
+    const exam = exams.find((x) => x.id === parseInt(e.target.value));
+    setSelectedExam(exam || null);
   };
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
-
-    if (h > 0) {
-      return `${h.toString().padStart(2, "0")}:${m
-        .toString()
-        .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-    } else {
-      return `${m.toString().padStart(2, "0")}:${s
-        .toString()
-        .padStart(2, "0")}`;
-    }
+    return h > 0
+      ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(
+          s
+        ).padStart(2, "0")}`
+      : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
-  // handle start exam
-  const handleStartExam = () => {
+  // Start exam (starts timer; WebRTC begins in effect below)
+  const handleStartExam = async () => {
     if (!selectedExam) {
       toast.warn("Please select an exam first!");
       return;
     }
 
     const now = new Date();
-
-    // Parse start time (e.g., "11:30:00")
     const [hour, minute, second = 0] = selectedExam.start_time
       .split(":")
       .map(Number);
-
-    // Construct full start datetime
     const startTime = new Date(selectedExam.exam_date);
     startTime.setHours(hour, minute, second, 0);
 
-    // Calculate end datetime using duration
     const durationInMinutes = parseInt(selectedExam.duration_minutes);
     const endTime = new Date(
       startTime.getTime() + durationInMinutes * 60 * 1000
@@ -123,21 +228,42 @@ const TakeExam = () => {
       toast.error("You can only start the exam at the scheduled time.");
       return;
     }
-
     if (now > endTime) {
       toast.error("The exam period has already ended.");
       return;
     }
 
-    //  Start exam and set remaining time
+    // Unlock audio synchronously in the click event (both players)
+    try {
+      if (!audioCtxRef.current) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        audioCtxRef.current = new AC();
+      }
+      if (audioCtxRef.current.state === "suspended") {
+        await audioCtxRef.current.resume();
+      }
+      if (beepRef.current) {
+        beepRef.current.load();
+        await beepRef.current.play();
+        beepRef.current.pause();
+        beepRef.current.currentTime = 0;
+      }
+      if (alarmRef.current && alarmRef.current.tagName === "AUDIO") {
+        alarmRef.current.load();
+        await alarmRef.current.play();
+        alarmRef.current.pause();
+        alarmRef.current.currentTime = 0;
+      }
+    } catch {
+      /* ignore; fallbacks will try again later */
+    }
+
     setIsTakingExam(true);
     const remainingTimeInSeconds = Math.floor((endTime - now) / 1000);
     setTimer(Math.max(0, remainingTimeInSeconds));
-
     toast.success("Exam started. Good luck!");
   };
 
-  // Helper function to format date
   const getTodayDate = () =>
     new Date().toLocaleDateString("en-US", {
       weekday: "long",
@@ -146,13 +272,15 @@ const TakeExam = () => {
       day: "numeric",
     });
 
+  // Timer tick
   useEffect(() => {
     if (isTakingExam && timer > 0) {
-      const countdown = setInterval(() => setTimer((prev) => prev - 1), 1000);
+      const countdown = setInterval(() => setTimer((p) => p - 1), 1000);
       return () => clearInterval(countdown);
     }
   }, [isTakingExam, timer]);
 
+  // Notify start -> backend
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("userData"));
     const studentId = userData?.id;
@@ -160,95 +288,132 @@ const TakeExam = () => {
     const notifStart = async () => {
       try {
         await axios.post(
-          "http://127.0.0.1:5000/api/update_exam_status_start",
-          {
-            student_id: studentId,
-          },
-          {
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
+          `${API_BASE}/api/update_exam_status_start`,
+          { student_id: studentId },
+          { headers: { "Content-Type": "application/json" } }
         );
       } catch (err) {
         console.error("Error updating start status:", err);
       }
     };
+    if (isTakingExam) notifStart();
+  }, [isTakingExam]);
 
-    if (isTakingExam) {
-      notifStart(); //
-    }
-  }, [isTakingExam]); //
-  // FIXED: dependency array goes here
-
+  // Start WebRTC AFTER the exam view mounts
   useEffect(() => {
-    if (isTakingExam) {
-      const interval = setInterval(async () => {
-        try {
-          const response = await axios.get(
-            "http://127.0.0.1:5000/api/detect_warning"
-          );
+    (async () => {
+      if (!isTakingExam || !selectedExam) return;
+      const userData = JSON.parse(localStorage.getItem("userData"));
+      const studentId = userData?.id;
 
-          if (response.data.warning !== "Looking Forward") {
-            try {
-              const userData = JSON.parse(localStorage.getItem("userData"));
-              const studentId = userData?.id;
-
-              // Fetch instructor_id securely
-              const res = await axios.get(
-                `http://127.0.0.1:5000/api/get-instructor-id?student_id=${studentId}`
-              );
-              const instructorId = res.data.instructor_id;
-              // then increase the real time behavior cvount to show it into th instructor pages
-              await axios.post(
-                "http://127.0.0.1:5000/api/increment-suspicious",
-                {
-                  student_id: studentId,
-                  instructor_id: instructorId,
-                }
-              );
-              console.log("Suspicious count incremented.");
-            } catch (err) {
-              console.error("Failed to increment suspicious count", err);
-            }
-            setWarningMessage(response.data.warning);
-            setShowWarning(true);
-
-            if (response.data.capture && response.data.frame) {
-              const userData = JSON.parse(localStorage.getItem("userData"));
-              const userId = userData?.id;
-
-              await axios.post("http://127.0.0.1:5000/api/save_behavior_log", {
-                user_id: userId,
-                exam_id: selectedExam.id,
-                image_base64: response.data.frame,
-                warning_type: response.data.warning,
-              });
-            }
-          }
-        } catch (error) {
-          console.error("Warning detection error:", error);
-        }
-      }, 3000);
-
-      return () => clearInterval(interval);
-    }
+      try {
+        await startProctoringWebRTC(
+          API_BASE,
+          studentId,
+          selectedExam.id,
+          videoPreviewRef.current
+        );
+      } catch (e) {
+        console.error("Failed to start WebRTC:", e);
+        toast.error(
+          "Could not access/send camera. Check permissions & HTTPS, then retry."
+        );
+        setIsTakingExam(false);
+      }
+    })();
   }, [isTakingExam, selectedExam]);
 
-  // fetch the caught behavior after submiting the exam
+  // Poll server for last_warning -> HUD + one-shot beeps + continuous alarm on No Face
+  useEffect(() => {
+    if (!isTakingExam || !selectedExam) return;
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const studentId = userData?.id;
+
+    const t = setInterval(async () => {
+      try {
+        const { data } = await axios.get(
+          `${API_BASE}/api/proctor/last_warning`,
+          { params: { student_id: studentId, exam_id: selectedExam.id } }
+        );
+
+        const warn = data?.warning || "Looking Forward";
+
+        const isNoFace = warn === "No Face";
+        if (isNoFace) {
+          await startNoFaceAlarm();
+        } else {
+          stopNoFaceAlarm();
+        }
+
+        // One-shot beep on NEW violation (exclude No Face; continuous handled above)
+        const isViolation = warn !== "Looking Forward" && !isNoFace;
+        if (isViolation && warn !== prevWarnRef.current) {
+          await playBeep();
+          setWarningMessage(warn);
+          setShowWarning(true);
+        }
+        prevWarnRef.current = warn;
+
+        // HUD badge
+        if (overlayRef.current) {
+          overlayRef.current.innerText = warn || "Looking Forward";
+          overlayRef.current.style.background =
+            warn === "Looking Forward"
+              ? "rgba(0,0,0,0.6)"
+              : warn === "No Face"
+              ? "rgba(128,0,0,0.75)"
+              : "rgba(160,30,0,0.8)";
+        }
+      } catch {
+        /* ignore polling errors */
+      }
+    }, 600);
+
+    return () => {
+      clearInterval(t);
+      stopNoFaceAlarm();
+    };
+  }, [isTakingExam, selectedExam, playBeep, startNoFaceAlarm, stopNoFaceAlarm]);
+
+  // Optional: poll server for last_capture -> beep on new capture (suppressed if No Face alarm is active)
+  useEffect(() => {
+    if (!isTakingExam || !selectedExam) return;
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const studentId = userData?.id;
+
+    const t = setInterval(async () => {
+      try {
+        const { data } = await axios.get(
+          `${API_BASE}/api/proctor/last_capture`,
+          { params: { student_id: studentId, exam_id: selectedExam.id } }
+        );
+        if (data?.at && data.at > lastCaptureAt) {
+          setLastCaptureAt(data.at);
+          if (!noFaceActiveRef.current) {
+            await playBeep();
+          }
+        }
+      } catch {
+        /* ignore polling errors */
+      }
+    }, 1200);
+
+    return () => clearInterval(t);
+  }, [isTakingExam, selectedExam, lastCaptureAt, playBeep]);
+
+  // Fetch behavior logs after submitting
   const fetchBehaviorLogs = useCallback(async () => {
     const userData = JSON.parse(localStorage.getItem("userData"));
     if (!userData?.id || !selectedExam?.id) return;
 
     const response = await axios.get(
-      `http://127.0.0.1:5000/api/get_behavior_logs?user_id=${userData.id}`
+      `${API_BASE}/api/get_behavior_logs?user_id=${userData.id}`
     );
-
     const logs = response.data.filter((log) => log.exam_id === selectedExam.id);
     setClassifiedLogs(logs.reverse());
   }, [selectedExam]);
 
-  // handle submit exam
+  // Submit exam
   const handleSubmitExam = useCallback(async () => {
     if (isSubmitting) return;
 
@@ -264,23 +429,25 @@ const TakeExam = () => {
 
     try {
       await axios.post(
-        "http://127.0.0.1:5000/api/update_exam_status_submit",
+        `${API_BASE}/api/update_exam_status_submit`,
         { student_id: studentId },
         { headers: { "Content-Type": "application/json" } }
       );
       toast.success("Exam submitted successfully!");
-    } catch (err) {
+    } catch {
       toast.error("Failed to submit exam.");
     }
 
     try {
-      await axios.post("http://127.0.0.1:5000/api/stop_camera");
-      await axios.post("http://127.0.0.1:5000/api/classify_behavior_logs", {
+      stopProctoringWebRTC();
+      stopNoFaceAlarm();
+
+      await axios.post(`${API_BASE}/api/classify_behavior_logs`, {
         user_id: studentId,
         exam_id: selectedExam.id,
       });
 
-      await axios.post("http://127.0.0.1:5000/api/submit_exam", {
+      await axios.post(`${API_BASE}/api/submit_exam`, {
         user_id: studentId,
         exam_id: selectedExam.id,
       });
@@ -296,55 +463,48 @@ const TakeExam = () => {
 
     setIsSubmitting(false);
     setIsTakingExam(false);
-  }, [isSubmitting, selectedExam, fetchBehaviorLogs]);
+  }, [isSubmitting, selectedExam, fetchBehaviorLogs, stopNoFaceAlarm]);
 
-  // handle the submit exam when its time up
+  // Auto-submit when time is up
   useEffect(() => {
     if (isTakingExam && timer === 0 && selectedExam?.id) {
       handleSubmitExam();
     }
   }, [timer, isTakingExam, selectedExam, handleSubmitExam]);
 
-  /*
-  // function that auto logout and change the status of student if they close the program or refresh the page
+  // Cleanup on unmount / route change
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem("userData"));
-    const studentId = userData?.id;
-
-    const handleUnload = async () => {
-      if (studentId) {
-        await fetch("http://127.0.0.1:5000/api/logout-exam", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ student_id: studentId }),
-          keepalive: true, // ensures it fires even during page unload
-        });
-      }
-    };
-
-    window.addEventListener("beforeunload", handleUnload);
-
     return () => {
-      window.removeEventListener("beforeunload", handleUnload);
+      stopProctoringWebRTC();
+      stopNoFaceAlarm();
     };
-  }, []);
-  */
+  }, [stopNoFaceAlarm]);
 
   return (
     <Container fluid className="py-4 px-3 px-md-5">
       <h2 className="mb-4 fw-bold text-center text-md-start">
         <i className="bi bi-journal-text me-2"></i>
-        Take Exam
+        {selectedExam ? selectedExam.title : "Take Exam"}
       </h2>
+
+      {/* One-shot beep: /beep.wav */}
+      <audio ref={beepRef} preload="auto">
+        <source src="/beep.wav" type="audio/wav" />
+      </audio>
+
+      {/* Continuous alarm for "No Face": also /beep.wav but looped */}
+      <audio ref={alarmRef} preload="auto" loop>
+        <source src="/beep.wav" type="audio/wav" />
+      </audio>
+
       <Alert variant="info" className="text-center mb-4">
         <strong>Today's Date:</strong> {getTodayDate()}
       </Alert>
+
       {/* Warning Modal */}
       <Modal show={showWarning} onHide={() => setShowWarning(false)} centered>
         <Modal.Header closeButton>
-          <Modal.Title>⚠️ Behavior Warning</Modal.Title>
+          <Modal.Title>Behavior Warning</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <p className="fs-5 text-danger">{`Warning: You are ${warningMessage}`}</p>
@@ -383,11 +543,10 @@ const TakeExam = () => {
                                 .toISOString()
                                 .split("T")[0]
                             : null;
-
-                          return examDate === today && exam.start_time; //  check both
+                          return examDate === today && exam.start_time;
                         })
                         .map((exam) => {
-                          if (!exam.exam_date || !exam.start_time) return null; //  prevent nulls
+                          if (!exam.exam_date || !exam.start_time) return null;
 
                           const formattedDate = new Date(
                             exam.exam_date
@@ -403,7 +562,6 @@ const TakeExam = () => {
                             .map(Number);
                           const timeDate = new Date();
                           timeDate.setHours(hour, minute, 0);
-
                           const formattedTime = timeDate.toLocaleTimeString(
                             [],
                             {
@@ -439,7 +597,7 @@ const TakeExam = () => {
         </Row>
       )}
 
-      {/* Exam View with Camera */}
+      {/* Exam View */}
       {isTakingExam && selectedExam && (
         <Row className="justify-content-center mt-4">
           <Col xs={12} lg={10}>
@@ -463,18 +621,42 @@ const TakeExam = () => {
                 </p>
 
                 <div className="text-center mt-4">
-                  <h5 className="fw-semibold mb-2">🎥 Live Camera Feed</h5>
-                  <img
-                    src="http://127.0.0.1:5000/api/video_feed"
-                    alt="Webcam Stream"
-                    className="img-fluid rounded border"
-                    style={{ maxWidth: "100%", height: "auto" }}
-                  />
+                  <h5 className="fw-semibold mb-2">
+                    🎥 Live Camera Feed (local preview)
+                  </h5>
+
+                  <div className="border rounded p-2 position-relative">
+                    {/* HUD badge */}
+                    <span
+                      ref={overlayRef}
+                      className="position-absolute top-0 start-0 m-2 px-2 py-1 text-white rounded"
+                      style={{
+                        fontSize: "0.85rem",
+                        background: "rgba(0,0,0,0.6)",
+                        zIndex: 10,
+                      }}
+                    >
+                      Looking Forward
+                    </span>
+
+                    <video
+                      ref={videoPreviewRef}
+                      className="img-fluid rounded"
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        background: "#f7f7f7",
+                      }}
+                      autoPlay
+                      playsInline
+                      muted
+                    />
+                  </div>
                 </div>
 
                 {examText && (
                   <div className="text-enter mt-4 px-4">
-                    <h5 className="fw-semibold mb-3">📝 Exam details</h5>
+                    <h5 className="fw-semibold mb-3">Exam details</h5>
                     <div
                       style={{
                         background: "#f9f9f9",
@@ -513,7 +695,7 @@ const TakeExam = () => {
         centered
       >
         <Modal.Header closeButton>
-          <Modal.Title>📸 Captured Behavior Logs</Modal.Title>
+          <Modal.Title>Captured Behavior Logs</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {classifiedLogs.length > 0 ? (

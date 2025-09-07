@@ -1,36 +1,22 @@
 # routes/behavior_routes.py
-
 from flask import Blueprint, request, jsonify
-from database.connection import get_db_connection
+from services.behavior_service import save_behavior_log
 
 behavior_bp = Blueprint('behavior', __name__)
 
-# POST: Save suspicious behavior log
 @behavior_bp.route('/save_behavior_log', methods=['POST'])
-def save_behavior_log():
-    data = request.json
-    user_id = data.get('user_id')           
-    exam_id = data.get('exam_id')           
+def save_behavior_log_route():
+    data = request.json or {}
+    user_id = data.get('user_id')
+    exam_id = data.get('exam_id')
     image_base64 = data.get('image_base64')
-    warning_type = data.get('warning_type') 
+    warning_type = data.get('warning_type')
 
-    # Validation
     if not all([user_id, exam_id, image_base64, warning_type]):
         return jsonify({"error": "Missing required fields"}), 400
 
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        insert_query = """
-            INSERT INTO suspicious_behavior_logs (user_id, exam_id, image_base64, warning_type)
-            VALUES (%s, %s, %s, %s)
-        """
-        cursor.execute(insert_query, (user_id, exam_id, image_base64, warning_type))
-        conn.commit()
-        conn.close()
-
-        return jsonify({"message": "Behavior log saved successfully"}), 201
-
+        _id = save_behavior_log(int(user_id), int(exam_id), image_base64, warning_type)
+        return jsonify({"message": "Behavior log saved successfully", "id": _id}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500

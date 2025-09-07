@@ -126,6 +126,8 @@ const StudentBehavior = () => {
           ? new Date(startTime.getTime() + durationMin * 60_000)
           : null;
 
+        console.log(startTime + " " + endTime + " " + now);
+
         if (startTime && endTime && now >= endTime) {
           // Loop through students who haven’t submitted and reset status
           const unsubmittedStudents = studentsData.filter(
@@ -261,7 +263,7 @@ const StudentBehavior = () => {
       toast.error("Failed to load behavior logs");
     }
   };
-  // Format date like: May 16, 2025
+
   const formatDate = (date) =>
     date.toLocaleDateString("en-US", {
       weekday: "short",
@@ -413,7 +415,15 @@ const StudentBehavior = () => {
                       ></span>
                     </td>
                     <td className="text-center">
-                      {student.suspicious_behavior_count}
+                      {student.has_submitted ? (
+                        <span className="badge bg-success fw-normal">
+                          Submitted
+                        </span>
+                      ) : (
+                        <span className="badge bg-secondary fw-normal">
+                          {student.suspicious_behavior_count ?? 0}
+                        </span>
+                      )}
                     </td>
 
                     <td>
@@ -546,7 +556,7 @@ const StudentBehavior = () => {
 
                       <p className="text-muted small mb-0">
                         <BsClock className="me-1" />
-                        {new Date(log.timestamp).toLocaleString()}
+                        {log.timestamp.toLocaleString()}
                       </p>
                     </Card.Body>
                   </Card>

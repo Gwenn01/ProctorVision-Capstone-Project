@@ -1,3 +1,6 @@
+import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"   # hide TF INFO/WARN
+os.environ["GLOG_minloglevel"] = "2"  
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -5,8 +8,12 @@ from database.connection import get_db_connection
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
-
+# Allow your frontend to call /api/* (tighten origins in prod)
+CORS(
+    app,
+    resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}},
+    supports_credentials=True,
+)
 # JWT Configuration
 app.config["JWT_SECRET_KEY"] = "supersecretkey"
 jwt = JWTManager(app)
@@ -24,10 +31,14 @@ def test_connection():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ---------------------------------------------
 # Register route blueprints
+# ---------------------------------------------
 from routes.create_account_routes import create_account_bp
 from routes.auth_routes import auth_bp
-from routes.video_routes import video_bp
+
+# from routes.video_routes import video_bp
+
 from routes.manage_users_routes import manage_users_bp
 from routes.instructor_exam_routes import instructor_exam_bp
 from routes.enrollment_routes import enrollment_bp
@@ -44,9 +55,14 @@ from routes.get_behavior_images import get_behavior_images_bp
 from routes.instructor_student_behavior import instructor_behavior_bp
 from routes.utils.email_verification import email_verification_bp
 
+# NEW: WebRTC blueprint (streams student camera to server)
+from routes.webrtc_routes import webrtc_bp
+
 app.register_blueprint(create_account_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='/api')
-app.register_blueprint(video_bp, url_prefix='/api')
+
+# app.register_blueprint(video_bp, url_prefix='/api')
+
 app.register_blueprint(manage_users_bp, url_prefix="/api")
 app.register_blueprint(instructor_exam_bp, url_prefix='/api')
 app.register_blueprint(enrollment_bp, url_prefix="/api")
@@ -63,7 +79,10 @@ app.register_blueprint(get_behavior_images_bp, url_prefix="/api")
 app.register_blueprint(instructor_behavior_bp, url_prefix="/api")
 app.register_blueprint(email_verification_bp, url_prefix="/api")
 
-if __name__ == "__main__":
-    # Run once, no auto-reloader, still in debug
-    app.run(host="127.0.0.1", port=5000, debug=True, use_reloader=False)
+# Register WebRTC endpoints last (organization preference)
+app.register_blueprint(webrtc_bp, url_prefix="/api")
 
+if __name__ == "__main__":
+    # For local dev, bind to all interfaces so other devices can reach it
+    # (Keep use_reloader=False to avoid duplicating aiortc loops.)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False, threaded=True)

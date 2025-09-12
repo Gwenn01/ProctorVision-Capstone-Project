@@ -481,36 +481,50 @@ const TakeExam = () => {
   }, [stopNoFaceAlarm]);
 
   return (
-    <Container fluid className="py-4 px-3 px-md-5">
-      <h2 className="mb-4 fw-bold text-center text-md-start">
+    <Container fluid className="py-4 px-3 px-md-5 bg-light min-vh-100">
+      {/* Title */}
+      <h2
+        className="mb-4 fw-bold text-center text-md-start"
+        style={{ color: "#0d3b66" }}
+      >
         <i className="bi bi-journal-text me-2"></i>
         {selectedExam ? selectedExam.title : "Take Exam"}
       </h2>
 
-      {/* One-shot beep: /beep.wav */}
+      {/* One-shot beep */}
       <audio ref={beepRef} preload="auto">
         <source src="/beep.wav" type="audio/wav" />
       </audio>
 
-      {/* Continuous alarm for "No Face": also /beep.wav but looped */}
+      {/* Continuous alarm */}
       <audio ref={alarmRef} preload="auto" loop>
         <source src="/beep.wav" type="audio/wav" />
       </audio>
 
-      <Alert variant="info" className="text-center mb-4">
-        <strong>Today's Date:</strong> {getTodayDate()}
+      {/* Date Alert */}
+      <Alert variant="info" className="text-center shadow-sm rounded-pill">
+        <i className="bi bi-calendar-event me-2"></i>
+        <strong>Today:</strong> {getTodayDate()}
       </Alert>
 
       {/* Warning Modal */}
       <Modal show={showWarning} onHide={() => setShowWarning(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Behavior Warning</Modal.Title>
+        <Modal.Header closeButton className="bg-danger text-white">
+          <Modal.Title>
+            <i className="bi bi-exclamation-triangle me-2"></i>
+            Behavior Warning
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p className="fs-5 text-danger">{`Warning: You are ${warningMessage}`}</p>
+          <p className="fs-5 text-danger text-center">
+            {`Warning: You are ${warningMessage}`}
+          </p>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="danger" onClick={() => setShowWarning(false)}>
+          <Button
+            variant="outline-danger"
+            onClick={() => setShowWarning(false)}
+          >
             Close
           </Button>
         </Modal.Footer>
@@ -520,11 +534,11 @@ const TakeExam = () => {
       {!isTakingExam && (
         <Row className="justify-content-center">
           <Col xs={12} md={8} lg={6}>
-            <Card className="p-4 shadow-sm border-0">
+            <Card className="p-4 shadow border-0 rounded-3">
               <Card.Body>
                 <Form.Group className="mb-3">
-                  <Form.Label className="fw-semibold">
-                    Select an Exam
+                  <Form.Label className="fw-semibold text-secondary">
+                    <i className="bi bi-list-task me-2"></i>Select an Exam
                   </Form.Label>
                   <Form.Select
                     onChange={handleExamSelect}
@@ -586,9 +600,9 @@ const TakeExam = () => {
                     variant="success"
                     onClick={handleStartExam}
                     disabled={!selectedExam}
-                    className="w-100"
+                    className="w-100 shadow-sm"
                   >
-                    Start Exam
+                    <i className="bi bi-play-fill me-2"></i>Start Exam
                   </Button>
                 </div>
               </Card.Body>
@@ -601,9 +615,14 @@ const TakeExam = () => {
       {isTakingExam && selectedExam && (
         <Row className="justify-content-center mt-4">
           <Col xs={12} lg={10}>
-            <Card className="p-4 shadow-lg border-0">
+            <Card className="p-4 shadow-lg border-0 rounded-3">
               <Card.Body>
-                <h3 className="text-center fw-bold">{selectedExam.title}</h3>
+                <h3
+                  className="text-center fw-bold"
+                  style={{ color: "#0d3b66" }}
+                >
+                  {selectedExam.title}
+                </h3>
 
                 <ProgressBar
                   animated
@@ -613,26 +632,28 @@ const TakeExam = () => {
                     100
                   }
                   variant="danger"
-                  className="my-3"
+                  className="my-3 rounded-pill"
                 />
 
                 <p className="text-center text-danger fw-semibold fs-5">
+                  <i className="bi bi-clock me-2"></i>
                   Time Left: {formatTime(timer)}
                 </p>
 
+                {/* Camera Feed */}
                 <div className="text-center mt-4">
-                  <h5 className="fw-semibold mb-2">
-                    🎥 Live Camera Feed (local preview)
+                  <h5 className="fw-semibold mb-2 text-secondary">
+                    <i className="bi bi-camera-video me-2"></i>
+                    Live Camera Feed
                   </h5>
 
-                  <div className="border rounded p-2 position-relative">
-                    {/* HUD badge */}
+                  <div className="border rounded-3 p-2 position-relative shadow-sm">
                     <span
                       ref={overlayRef}
                       className="position-absolute top-0 start-0 m-2 px-2 py-1 text-white rounded"
                       style={{
                         fontSize: "0.85rem",
-                        background: "rgba(0,0,0,0.6)",
+                        background: "rgba(0,0,0,0.7)",
                         zIndex: 10,
                       }}
                     >
@@ -641,7 +662,7 @@ const TakeExam = () => {
 
                     <video
                       ref={videoPreviewRef}
-                      className="img-fluid rounded"
+                      className="img-fluid rounded-3"
                       style={{
                         width: "100%",
                         height: "auto",
@@ -654,17 +675,22 @@ const TakeExam = () => {
                   </div>
                 </div>
 
+                {/* Exam Content */}
                 {examText && (
                   <div className="text-enter mt-4 px-4">
-                    <h5 className="fw-semibold mb-3">Exam details</h5>
+                    <h5 className="fw-semibold mb-3 text-secondary">
+                      <i className="bi bi-file-earmark-text me-2"></i>
+                      Exam Details
+                    </h5>
                     <div
                       style={{
                         background: "#f9f9f9",
                         padding: "20px",
-                        borderRadius: "8px",
+                        borderRadius: "10px",
                         whiteSpace: "pre-wrap",
                         lineHeight: "1.6",
                         fontSize: "1rem",
+                        boxShadow: "inset 0 1px 3px rgba(0,0,0,0.1)",
                       }}
                     >
                       {examText || "Loading exam content..."}
@@ -672,11 +698,17 @@ const TakeExam = () => {
                   </div>
                 )}
 
+                {/* Submit Button */}
                 <div className="d-flex justify-content-center mt-4">
                   {isSubmitting ? (
                     <Spinner />
                   ) : (
-                    <Button variant="primary" onClick={handleSubmitExam}>
+                    <Button
+                      variant="primary"
+                      onClick={handleSubmitExam}
+                      className="px-5 shadow-sm"
+                    >
+                      <i className="bi bi-check2-circle me-2"></i>
                       Submit Exam
                     </Button>
                   )}
@@ -694,8 +726,11 @@ const TakeExam = () => {
         size="lg"
         centered
       >
-        <Modal.Header closeButton>
-          <Modal.Title>Captured Behavior Logs</Modal.Title>
+        <Modal.Header closeButton className="bg-dark text-white">
+          <Modal.Title>
+            <i className="bi bi-image me-2"></i>
+            Captured Behavior Logs
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {classifiedLogs.length > 0 ? (
@@ -713,7 +748,10 @@ const TakeExam = () => {
                     alt={`Captured ${index}`}
                     className="img-fluid rounded shadow-sm border mb-2"
                   />
-                  <div className="fw-semibold">Warning: {log.warning_type}</div>
+                  <div className="fw-semibold">
+                    <i className="bi bi-exclamation-circle me-1"></i>
+                    Warning: {log.warning_type}
+                  </div>
                   <div
                     className={`fw-bold ${
                       log.classification_label === "Cheating"
@@ -721,13 +759,14 @@ const TakeExam = () => {
                         : "text-success"
                     }`}
                   >
+                    <i className="bi bi-shield-check me-1"></i>
                     Result: {log.classification_label || "Unclassified"}
                   </div>
                 </Col>
               ))}
             </Row>
           ) : (
-            <p className="text-center">No behavior logs found.</p>
+            <p className="text-center text-muted">No behavior logs found.</p>
           )}
         </Modal.Body>
       </Modal>

@@ -295,7 +295,9 @@ const StudentBehavior = () => {
   return (
     <Container className="py-4">
       <ToastContainer />
-      <h2 className="text-center fw-bold mb-4">
+
+      {/* Page Header */}
+      <h2 className="text-start fw-bold mb-4" style={{ color: "#0d0e0eff" }}>
         <BsCalendarEvent className="me-2" />
         Student Behavior Overview
       </h2>
@@ -310,23 +312,23 @@ const StudentBehavior = () => {
             {
               label: "Current Exams",
               color: "success",
-              icon: <BsCheckCircle />,
+              icon: <BsCheckCircle className="me-2" />,
               data: current,
+              handler: handleCurrentExamClick,
             },
             {
               label: "Past Exams",
               color: "secondary",
-              icon: <BsBoxArrowInDownLeft />,
+              icon: <BsBoxArrowInDownLeft className="me-2" />,
               data: past,
+              handler: handlePastExamClick,
             },
           ].map((group, idx) => (
-            <Col md={4} key={idx}>
+            <Col md={6} lg={5} key={idx}>
               <Card className="shadow-sm mb-4 h-100">
                 <Card.Header className={`bg-${group.color} text-white fw-bold`}>
                   {group.icon} {group.label}
                 </Card.Header>
-
-                {/* Scrollable Body */}
                 <Card.Body
                   className="overflow-auto"
                   style={{ maxHeight: "400px" }}
@@ -335,18 +337,15 @@ const StudentBehavior = () => {
                     group.data.map((exam) => (
                       <Card
                         key={exam.id}
-                        className="mb-2"
-                        onClick={() => {
-                          group.label === "Past Exams"
-                            ? handlePastExamClick(exam)
-                            : handleCurrentExamClick(exam);
-                        }}
+                        className="mb-2 border-0 shadow-sm"
+                        onClick={() => group.handler(exam)}
                         style={{ cursor: "pointer" }}
                       >
                         <Card.Body>
                           <strong>{exam.title}</strong>
                           <div className="text-muted small">
-                            {formatDate(new Date(exam.exam_date))} <br />
+                            {formatDate(new Date(exam.exam_date))}
+                            <br />
                             {formatTimeRange(
                               exam.exam_date,
                               exam.start_time,
@@ -357,7 +356,7 @@ const StudentBehavior = () => {
                       </Card>
                     ))
                   ) : (
-                    <p className="text-muted">No exams</p>
+                    <p className="text-muted text-center">No exams</p>
                   )}
                 </Card.Body>
               </Card>
@@ -366,86 +365,98 @@ const StudentBehavior = () => {
         </Row>
       )}
 
+      {/* Current Exam Modal */}
       <Modal
         show={showCurrentExamModal}
         onHide={() => setShowCurrentExamModal(false)}
-        size="lg"
+        size="xl" // ✅ Wider modal
         centered
       >
-        <Modal.Header closeButton>
+        <Modal.Header closeButton className="bg-dark text-white">
           <Modal.Title>
-            Students Taking Exam - {selectedExam?.title}
+            <i className="bi bi-people me-2"></i>
+            Students Taking Exam – {selectedExam?.title}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {students.length ? (
-            <Table striped hover responsive>
-              <thead>
+            <Table
+              striped
+              bordered
+              hover
+              responsive
+              className="align-middle shadow-sm"
+            >
+              <thead className="table-light">
                 <tr>
                   <th>Name</th>
                   <th>Username</th>
-                  <th>Is Logged In</th>
-                  <th>Taking Exam</th>
-                  <th>Suspicious Behavior Count</th>
+                  <th>Login</th>
+                  <th>Exam</th>
+                  <th className="text-center">Suspicious</th>
                   <th>Submitted</th>
-                  <th>Action</th>
+                  <th className="text-center">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {students.map((student) => (
                   <tr key={student.student_id}>
-                    <td>{student.name}</td>
-                    <td>{student.username}</td>
+                    <td className="fw-semibold">{student.name}</td>
+                    <td className="text-muted">{student.username}</td>
+
+                    {/* Login Status */}
                     <td>
-                      <span
-                        className={`status-indicator ${
-                          student.is_login ? "active" : "inactive"
-                        }`}
-                        title={student.is_login ? "Logged In" : "Not Logged In"}
-                      ></span>
-                    </td>
-                    <td>
-                      <span
-                        className={`status-indicator ${
-                          student.is_taking_exam ? "active" : "inactive"
-                        }`}
-                        title={
-                          student.is_taking_exam ? "Taking Exam" : "Not Taking"
-                        }
-                      ></span>
-                    </td>
-                    <td className="text-center">
-                      {student.has_submitted ? (
-                        <span className="badge bg-success fw-normal">
-                          Submitted
+                      {student.is_login ? (
+                        <span className="badge bg-success">
+                          <i className="bi bi-check-circle me-1"></i> Yes
                         </span>
                       ) : (
-                        <span className="badge bg-secondary fw-normal">
+                        <span className="badge bg-secondary">No</span>
+                      )}
+                    </td>
+
+                    {/* Exam Status */}
+                    <td>
+                      {student.is_taking_exam ? (
+                        <span className="badge bg-info text-dark">
+                          <i className="bi bi-pencil-square me-1"></i> Taking
+                        </span>
+                      ) : (
+                        <span className="badge bg-secondary">No</span>
+                      )}
+                    </td>
+
+                    {/* Suspicious Count */}
+                    <td className="text-center">
+                      {student.has_submitted ? (
+                        <span className="badge bg-success">Submitted</span>
+                      ) : (
+                        <span className="badge bg-warning text-dark">
                           {student.suspicious_behavior_count ?? 0}
                         </span>
                       )}
                     </td>
 
+                    {/* Submitted */}
                     <td>
-                      <span
-                        className={`status-indicator ${
-                          student.has_submitted
-                            ? "active submitted"
-                            : "inactive"
-                        }`}
-                        title={
-                          student.has_submitted ? "Submitted" : "Not Submitted"
-                        }
-                      ></span>
+                      {student.has_submitted ? (
+                        <span className="badge bg-success">
+                          <i className="bi bi-check2-circle me-1"></i> Yes
+                        </span>
+                      ) : (
+                        <span className="badge bg-secondary">No</span>
+                      )}
                     </td>
 
-                    <td>
+                    {/* Action */}
+                    <td className="text-center">
                       <Button
                         variant="outline-primary"
                         size="sm"
                         onClick={() => handleStudentClick(student)}
+                        className="d-flex align-items-center justify-content-center"
                       >
-                        View Behavior
+                        <i className="bi bi-eye me-1"></i> View
                       </Button>
                     </td>
                   </tr>
@@ -453,24 +464,31 @@ const StudentBehavior = () => {
               </tbody>
             </Table>
           ) : (
-            <p className="text-muted">No assigned students found.</p>
+            <p className="text-muted text-center">
+              <i className="bi bi-info-circle me-2"></i>
+              No assigned students found.
+            </p>
           )}
         </Modal.Body>
       </Modal>
 
+      {/* Past Exam Modal */}
       <Modal
         show={showPastExamModal}
         onHide={() => setShowPastExamModal(false)}
         size="lg"
         centered
       >
-        <Modal.Header closeButton>
-          <Modal.Title>Past Exam - {selectedExam?.title}</Modal.Title>
+        <Modal.Header closeButton className="bg-dark text-white">
+          <Modal.Title>
+            <i className="bi bi-archive me-2"></i>
+            Past Exam – {selectedExam?.title}
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {students.length ? (
-            <Table striped hover>
-              <thead>
+            <Table bordered hover responsive className="align-middle shadow-sm">
+              <thead className="table-light">
                 <tr>
                   <th>Name</th>
                   <th>Username</th>
@@ -482,14 +500,14 @@ const StudentBehavior = () => {
                 {students.map((student) => (
                   <tr key={student.id}>
                     <td>{student.name}</td>
-                    <td>{student.username}</td>
+                    <td className="text-muted">{student.username}</td>
                     <td>
                       {student.exam_status === "Did Not Take Exam" ? (
-                        <span className="text-muted">Did Not Take Exam</span>
+                        <span className="badge bg-secondary">Did Not Take</span>
                       ) : student.exam_status === "Cheated" ? (
-                        <span className="text-danger fw-bold">Cheating</span>
+                        <span className="badge bg-danger">Cheating</span>
                       ) : (
-                        <span className="text-success">Completed</span>
+                        <span className="badge bg-success">Completed</span>
                       )}
                     </td>
                     <td>
@@ -498,7 +516,7 @@ const StudentBehavior = () => {
                         size="sm"
                         onClick={() => handleStudentClick(student)}
                       >
-                        View Behavior
+                        <i className="bi bi-eye me-1"></i> View
                       </Button>
                     </td>
                   </tr>
@@ -506,7 +524,10 @@ const StudentBehavior = () => {
               </tbody>
             </Table>
           ) : (
-            <p className="text-muted">No behavior data available.</p>
+            <p className="text-muted text-center">
+              <i className="bi bi-info-circle me-2"></i>No behavior data
+              available.
+            </p>
           )}
         </Modal.Body>
       </Modal>
@@ -515,13 +536,13 @@ const StudentBehavior = () => {
       <Modal
         show={showBehaviorModal}
         onHide={() => setShowBehaviorModal(false)}
-        size="lg"
+        size="xl"
         centered
       >
-        <Modal.Header closeButton>
+        <Modal.Header closeButton className="bg-dark text-white">
           <Modal.Title>
-            <BsBoxArrowInDownLeft className="me-2" />
-            Suspicious Behavior - {selectedStudent?.name} (
+            <i className="bi bi-eye me-2"></i>
+            Suspicious Behavior – {selectedStudent?.name} (
             {selectedStudent?.username})
           </Modal.Title>
         </Modal.Header>
@@ -529,31 +550,30 @@ const StudentBehavior = () => {
           {behaviorLogs.length ? (
             <Row>
               {behaviorLogs.map((log, idx) => (
-                <Col md={4} key={idx} className="mb-3">
-                  <Card className="shadow-sm border-danger">
+                <Col md={4} key={idx} className="mb-4">
+                  <Card className="shadow-sm h-100">
+                    {" "}
                     <Image
                       src={`data:image/jpeg;base64,${log.image_base64}`}
                       alt="Suspicious"
                       fluid
+                      className="rounded-top"
                     />
                     <Card.Body>
                       <p className="mb-2">
                         <BsExclamationTriangleFill className="me-1 text-warning" />
                         <strong>Type:</strong> {log.warning_type}
                       </p>
-
                       <p
-                        className={`mb-2 ${
+                        className={`mb-2 fw-semibold ${
                           log.classification_label === "Cheating"
                             ? "text-danger"
                             : "text-success"
                         }`}
                       >
                         <BsCpuFill className="me-1 text-primary" />
-                        <strong>AI Classification:</strong>{" "}
-                        {log.classification_label}
+                        AI: {log.classification_label}
                       </p>
-
                       <p className="text-muted small mb-0">
                         <BsClock className="me-1" />
                         {log.timestamp.toLocaleString()}
@@ -564,10 +584,10 @@ const StudentBehavior = () => {
               ))}
             </Row>
           ) : (
-            <p className="text-muted">
+            <div className="text-center text-muted">
               <BsCheckCircle className="me-2 text-success" />
               No suspicious behavior detected by the AI model.
-            </p>
+            </div>
           )}
         </Modal.Body>
       </Modal>

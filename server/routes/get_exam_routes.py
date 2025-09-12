@@ -85,8 +85,9 @@ def update_exam_status_submit():
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE instructor_assignments 
-            SET is_taking_exam = 0
+            UPDATE instructor_assignments
+            SET is_taking_exam = 0,
+                suspicious_behavior_count = 0
             WHERE student_id = %s
             """,
             (student_id,)  #  FIXED tuple syntax

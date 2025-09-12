@@ -8,12 +8,15 @@ import cv2, numpy as np
 import mediapipe as mp
 
 from services.behavior_service import save_behavior_log_async  # save image to DB (async)
-from services.instructor_services import increment_suspicious_for_student_async  # ⬅ NEW: bump counter (async)
+from services.instructor_services import increment_suspicious_for_student_async  # bump counter (async)
 
 webrtc_bp = Blueprint("webrtc", __name__)
 
-# -------- logging --------
+# -------- logging / config --------
 SUMMARY_EVERY_S = float(os.getenv("PROCTOR_SUMMARY_EVERY_S", "1.0"))
+RECV_TIMEOUT_S  = float(os.getenv("PROCTOR_RECV_TIMEOUT_S", "5.0"))   # timeout for track.recv
+HEARTBEAT_S     = float(os.getenv("PROCTOR_HEARTBEAT_S", "10.0"))     # reader heartbeat log
+
 def log(event, sid="-", eid="-", **kv):
     tail = " ".join(f"{k}={v}" for k, v in kv.items())
     print(f"[{event}] sid={sid} eid={eid} {tail}".strip(), flush=True)
@@ -30,16 +33,26 @@ last_warning = defaultdict(lambda: {"warning": "Looking Forward", "at": 0})
 last_metrics = defaultdict(lambda: {"yaw": None, "pitch": None, "dx": None, "dy": None, "fps": None, "label": "n/a", "at": 0})
 last_capture = defaultdict(lambda: {"label": None, "at": 0})
 
-# thresholds
-YAW_DEG_TRIG   = float(os.getenv("PROCTOR_YAW_DEG", "12"))
-PITCH_DEG_TRIG = float(os.getenv("PROCTOR_PITCH_DEG", "10"))
-DX_TRIG        = float(os.getenv("PROCTOR_DX", "0.06"))
-DY_TRIG        = float(os.getenv("PROCTOR_DY", "0.08"))
-SMOOTH_N       = int(os.getenv("PROCTOR_SMOOTH_N", "5"))
+# -------- thresholds (env tunable) --------
+# head pose
+YAW_DEG_TRIG        = float(os.getenv("PROCTOR_YAW_DEG", "12"))     # left/right
+PITCH_DEG_TRIG_UP   = float(os.getenv("PROCTOR_PITCH_UP_DEG", "10")) # up
+PITCH_DEG_TRIG_DOWN = float(os.getenv("PROCTOR_PITCH_DOWN_DEG", "16")) # down (less sensitive than before)
+DX_TRIG             = float(os.getenv("PROCTOR_DX", "0.06"))
+DY_TRIG_UP          = float(os.getenv("PROCTOR_DY_UP", "0.08"))
+DY_TRIG_DOWN        = float(os.getenv("PROCTOR_DY_DOWN", "0.10"))     # down (less sensitive)
+SMOOTH_N            = int(os.getenv("PROCTOR_SMOOTH_N", "5"))
 
 # capture policy
-CAPTURE_MIN_MS = int(os.getenv("PROCTOR_CAPTURE_MIN_MS", "1200"))
-HOLD_FRAMES    = int(os.getenv("PROCTOR_HOLD_FRAMES", "3"))
+CAPTURE_MIN_MS        = int(os.getenv("PROCTOR_CAPTURE_MIN_MS", "1200"))
+HOLD_FRAMES_HEAD      = int(os.getenv("PROCTOR_HOLD_FRAMES_HEAD", "3"))
+HOLD_FRAMES_NOFACE    = int(os.getenv("PROCTOR_HOLD_FRAMES_NOFACE", "3"))
+HOLD_FRAMES_HAND      = int(os.getenv("PROCTOR_HOLD_FRAMES_HAND", "5"))  # stricter for hands
+
+# hand filters (reduce sensitivity)
+HAND_MIN_BOX_FRAC     = float(os.getenv("PROCTOR_HAND_MIN_BOX_FRAC", "0.025"))  # 2.5% of frame area
+HAND_MAX_BOX_FRAC     = float(os.getenv("PROCTOR_HAND_MAX_BOX_FRAC", "0.60"))   # ignore near-full-frame noise
+HAND_REQUIRE_LANDMARK = int(os.getenv("PROCTOR_HAND_REQUIRE_LANDMARK", "7"))    # at least N landmarks in-box
 
 # -------- MediaPipe --------
 mp_face_mesh = mp.solutions.face_mesh
@@ -50,7 +63,7 @@ face_mesh = mp_face_mesh.FaceMesh(
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
     static_image_mode=False, max_num_hands=2,
-    min_detection_confidence=0.5, min_tracking_confidence=0.5
+    min_detection_confidence=0.6, min_tracking_confidence=0.6
 )
 
 # FaceMesh indices + 3D model
@@ -87,6 +100,10 @@ class ProctorDetector:
         self.base_yaw = None
         self.base_pitch = None
         self.last_capture_ms = 0
+
+        # streaks for noface / hand capture holds
+        self.noface_streak = 0
+        self.hand_streak   = 0
 
     def _update_baseline(self, yaw, pitch):
         alpha = 0.10
@@ -145,14 +162,27 @@ class ProctorDetector:
         if pitch is not None:
             self.pitch_hist.append(pitch); pitch_s = float(np.median(self.pitch_hist))
 
+        # triggers
         yaw_trigger   = (yaw_s is not None and abs(yaw_s) > YAW_DEG_TRIG) or (abs(dx_s) > DX_TRIG)
-        pitch_trigger = (pitch_s is not None and abs(pitch_s) > PITCH_DEG_TRIG) or (abs(dy_s) > DY_TRIG)
+
+        # For "Down", require BOTH pitch and DY to exceed higher thresholds
+        pitch_down_trigger = (
+            (pitch_s is not None and pitch_s > PITCH_DEG_TRIG_DOWN) and
+            (dy_s > DY_TRIG_DOWN)
+        )
+        # For "Up", keep original sensitivity (OR) unless you also want stricter:
+        pitch_up_trigger = (
+            (pitch_s is not None and -pitch_s > PITCH_DEG_TRIG_UP) or
+            (dy_s < -DY_TRIG_UP)
+        )
 
         label = "Looking Forward"
-        if yaw_trigger and (abs(dx_s) >= abs(dy_s) or not pitch_trigger):
+        if yaw_trigger and (abs(dx_s) >= abs(dy_s) or not (pitch_up_trigger or pitch_down_trigger)):
             label = "Looking Right" if dx_s > 0 else "Looking Left"
-        elif pitch_trigger:
-            label = "Looking Down" if dy_s > 0 else "Looking Up"
+        elif pitch_down_trigger:
+            label = "Looking Down"
+        elif pitch_up_trigger:
+            label = "Looking Up"
 
         if label == "Looking Forward":
             self._update_baseline(yaw_s, pitch_s)
@@ -168,55 +198,114 @@ class ProctorDetector:
         return label, box, rgb, yaw_s, pitch_s, dx_s, dy_s
 
     def detect_hands_anywhere(self, rgb):
+        """
+        Less sensitive hand detection:
+        - requires a minimum hand bounding box area vs frame (HAND_MIN_BOX_FRAC)
+        - ignores absurdly large boxes (HAND_MAX_BOX_FRAC)
+        - returns ('Hand Detected', count) only if at least one qualified hand is present
+        """
+        h, w = rgb.shape[:2]
+        frame_area = float(h * w)
         res = hands.process(rgb)
         if not res.multi_hand_landmarks:
             return None, 0
-        return "Hand Detected", len(res.multi_hand_landmarks)
 
-    # support dx/dy-only hold when yaw/pitch are NA
-    def should_capture_head(self, head_label):
+        qualified = 0
+        for hlms in res.multi_hand_landmarks:
+            xs = [p.x for p in hlms.landmark]; ys = [p.y for p in hlms.landmark]
+            x1 = max(0, int(min(xs) * w)); y1 = max(0, int(min(ys) * h))
+            x2 = min(w, int(max(xs) * w)); y2 = min(h, int(max(ys) * h))
+            bw, bh = max(1, x2 - x1), max(1, y2 - y1)
+            box_area_frac = (bw * bh) / frame_area
+
+            # crude landmark-count-in-box sanity (they all are, but keep option)
+            lm_in_box = sum(
+                1 for p in hlms.landmark
+                if (x1 <= int(p.x * w) <= x2 and y1 <= int(p.y * h) <= y2)
+            )
+
+            if HAND_MIN_BOX_FRAC <= box_area_frac <= HAND_MAX_BOX_FRAC and lm_in_box >= HAND_REQUIRE_LANDMARK:
+                qualified += 1
+
+        if qualified > 0:
+            return "Hand Detected", qualified
+        return None, 0
+
+    # capture throttles (shared for all capture kinds)
+    def _throttle_ok(self):
+        return int(time.time()*1000) - self.last_capture_ms >= CAPTURE_MIN_MS
+    def _mark_captured(self):
+        self.last_capture_ms = int(time.time()*1000)
+
+    # head (left/right/up/down)
+    def should_capture_head(self, head_label, sid="-", eid="-"):
         if head_label in ("Looking Forward", "No Face"):
-            log("CAPTURE_DECISION", reason="label_guard", label=head_label)
+            return False
+        if not self._throttle_ok():
             return False
 
-        throttle_ok = int(time.time()*1000) - self.last_capture_ms >= CAPTURE_MIN_MS
-        if not throttle_ok:
-            log("CAPTURE_DECISION", reason="throttle", ms_since=int(time.time()*1000)-self.last_capture_ms)
-            return False
-
-        # 1) Pixel hold
+        # Pixel hold
         pixel_hold_ok = False
-        if len(self.dx_hist) >= HOLD_FRAMES and len(self.dy_hist) >= HOLD_FRAMES:
-            dxs = list(self.dx_hist)[-HOLD_FRAMES:]
-            dys = list(self.dy_hist)[-HOLD_FRAMES:]
+        if len(self.dx_hist) >= HOLD_FRAMES_HEAD and len(self.dy_hist) >= HOLD_FRAMES_HEAD:
+            dxs = list(self.dx_hist)[-HOLD_FRAMES_HEAD:]
+            dys = list(self.dy_hist)[-HOLD_FRAMES_HEAD:]
             if head_label in ("Looking Left", "Looking Right"):
                 pixel_hold_ok = all(abs(x) > DX_TRIG for x in dxs)
             elif head_label in ("Looking Up", "Looking Down"):
-                pixel_hold_ok = all(abs(y) > DY_TRIG for y in dys)
+                # For "Down", mirror the stricter rule: require DY hold above down threshold
+                if head_label == "Looking Down":
+                    pixel_hold_ok = all(y > DY_TRIG_DOWN for y in dys)
+                else:  # Looking Up
+                    pixel_hold_ok = all(-y > DY_TRIG_UP for y in dys)
             else:
                 pixel_hold_ok = (all(abs(x) > DX_TRIG for x in dxs) or
-                                 all(abs(y) > DY_TRIG for y in dys))
+                                 all(abs(y) > max(DY_TRIG_UP, DY_TRIG_DOWN) for y in dys))
 
-        # 2) Angle hold
+        # Angle hold
         angle_hold_ok = False
-        if len(self.yaw_hist) >= HOLD_FRAMES and len(self.pitch_hist) >= HOLD_FRAMES:
+        if len(self.yaw_hist) >= HOLD_FRAMES_HEAD and len(self.pitch_hist) >= HOLD_FRAMES_HEAD:
             by = self.base_yaw if self.base_yaw is not None else 0.0
             bp = self.base_pitch if self.base_pitch is not None else 0.0
-            recent_yaw   = list(self.yaw_hist)[-HOLD_FRAMES:]
-            recent_pitch = list(self.pitch_hist)[-HOLD_FRAMES:]
-            angle_hold_ok = (
-                all(abs(y - by) > YAW_DEG_TRIG   for y in recent_yaw) or
-                all(abs(p - bp) > PITCH_DEG_TRIG for p in recent_pitch)
-            )
+            recent_yaw   = list(self.yaw_hist)[-HOLD_FRAMES_HEAD:]
+            recent_pitch = list(self.pitch_hist)[-HOLD_FRAMES_HEAD:]
+            if head_label in ("Looking Left", "Looking Right"):
+                angle_hold_ok = all(abs(y - by) > YAW_DEG_TRIG for y in recent_yaw)
+            elif head_label == "Looking Down":
+                angle_hold_ok = all((p - bp) > PITCH_DEG_TRIG_DOWN for p in recent_pitch)
+            elif head_label == "Looking Up":
+                angle_hold_ok = all((bp - p) > PITCH_DEG_TRIG_UP for p in recent_pitch)
 
-        hold_ok = pixel_hold_ok or angle_hold_ok
-        log("CAPTURE_DECISION", label=head_label, pixel_hold=pixel_hold_ok, angle_hold=angle_hold_ok, hold_frames=HOLD_FRAMES)
+        ok = pixel_hold_ok or angle_hold_ok
+        if ok:
+            log("CAPTURE_DECISION_HEAD", sid, eid, label=head_label,
+                pixel_hold=pixel_hold_ok, angle_hold=angle_hold_ok,
+                hold_frames=HOLD_FRAMES_HEAD, ok=True)
+            self._mark_captured()
+        return ok
 
-        if not hold_ok:
+    # no face
+    def should_capture_noface(self, sid="-", eid="-"):
+        if not self._throttle_ok():
             return False
+        ok = self.noface_streak >= HOLD_FRAMES_NOFACE
+        if ok:
+            log("CAPTURE_DECISION_NOFACE", sid, eid,
+                streak=self.noface_streak, hold_frames=HOLD_FRAMES_NOFACE, ok=True)
+            self._mark_captured()
+        return ok
 
-        self.last_capture_ms = int(time.time()*1000)
-        return True
+    # hands
+    def should_capture_hand(self, hand_label, sid="-", eid="-"):
+        if not hand_label:
+            return False
+        if not self._throttle_ok():
+            return False
+        ok = self.hand_streak >= HOLD_FRAMES_HAND
+        if ok:
+            log("CAPTURE_DECISION_HAND", sid, eid,
+                streak=self.hand_streak, hold_frames=HOLD_FRAMES_HAND, ok=True)
+            self._mark_captured()
+        return ok
 
 detectors = defaultdict(ProctorDetector)
 
@@ -236,14 +325,8 @@ def _maybe_capture(student_id: str, exam_id: str, bgr, label: str):
         on_error=lambda e: log("CAPTURE_ERR", student_id, exam_id, err=str(e))
     )
 
-    # 🔔 NEW: bump suspicious counter (async)
-    increment_suspicious_for_student_async(
-        int(student_id),
-        # pass exam_id to the service if your mapping uses it:
-        # exam_id=int(exam_id),
-        # and optionally log errors:
-        # on_error=lambda e: log("INCR_SUSPICIOUS_ERR", student_id, exam_id, err=str(e))
-    )
+    # bump suspicious counter (async)
+    increment_suspicious_for_student_async(int(student_id))
 
     # update in-memory cache for frontend beep
     ts = int(time.time() * 1000)
@@ -290,27 +373,49 @@ async def handle_offer(data: dict):
         if track.kind == "video":
             async def reader():
                 det = detectors[key]
-                t0 = time.time(); frames = 0
+                t_fps = time.time(); frames = 0
+                last_heartbeat = time.time()
+
                 while True:
+                    # --- receive with timeout ---
                     try:
-                        frame = await track.recv()
-                        bgr = frame.to_ndarray(format="bgr24")
+                        frame = await asyncio.wait_for(track.recv(), timeout=RECV_TIMEOUT_S)
+                    except asyncio.TimeoutError:
+                        # lightweight heartbeat on timeouts
+                        now = time.time()
+                        if now - last_heartbeat >= HEARTBEAT_S:
+                            log("TRACK_RECV_TIMEOUT", student_id, exam_id, timeout_s=RECV_TIMEOUT_S)
+                            last_heartbeat = now
+                        continue
                     except Exception as e:
                         log("TRACK_RECV_END", student_id, exam_id, err=str(e))
                         break
 
+                    # fps window
                     frames += 1
-                    if time.time() - t0 >= 2.0:
-                        fps = frames / max(1e-6, (time.time()-t0))
+                    now = time.time()
+                    if now - t_fps >= 2.0:
+                        fps = frames / max(1e-6, (now - t_fps))
                         lm = last_metrics.get(key, {})
                         lm["fps"] = fps
                         last_metrics[key] = lm
                         log("FPS", student_id, exam_id, fps=f"{fps:.1f}")
-                        t0 = time.time(); frames = 0
+                        t_fps = now; frames = 0
 
-                    head_label, face_box, rgb, yaw_s, pitch_s, dx_s, dy_s = det.detect(bgr, sid=student_id, eid=exam_id)
-                    hand_label, _ = det.detect_hands_anywhere(rgb)
+                    # --- per-frame detection protected ---
+                    try:
+                        bgr = frame.to_ndarray(format="bgr24")
+                        head_label, face_box, rgb, yaw_s, pitch_s, dx_s, dy_s = det.detect(bgr, sid=student_id, eid=exam_id)
+                        hand_label, _ = det.detect_hands_anywhere(rgb)
+                    except Exception as e:
+                        log("DETECT_ERR", student_id, exam_id, err=str(e))
+                        continue
 
+                    # maintain streaks with stricter holds for hand/noface
+                    det.noface_streak = det.noface_streak + 1 if head_label == "No Face" else 0
+                    det.hand_streak   = det.hand_streak + 1 if hand_label else 0
+
+                    # choose UI label
                     if head_label == "No Face":
                         warn = "No Face (Hand Detected)" if hand_label else "No Face"
                     elif head_label != "Looking Forward":
@@ -320,9 +425,13 @@ async def handle_offer(data: dict):
                     else:
                         warn = "Looking Forward"
 
-                    # capture when head is not forward (and not 'No Face')
-                    if det.should_capture_head(head_label):
+                    # --- capture priority with holds/throttle ---
+                    if head_label == "No Face" and det.should_capture_noface(sid=student_id, eid=exam_id):
+                        _maybe_capture(student_id, exam_id, bgr, "No Face")
+                    elif head_label not in ("Looking Forward", "No Face") and det.should_capture_head(head_label, sid=student_id, eid=exam_id):
                         _maybe_capture(student_id, exam_id, bgr, head_label)
+                    elif hand_label and det.should_capture_hand(hand_label, sid=student_id, eid=exam_id):
+                        _maybe_capture(student_id, exam_id, bgr, "Hand Detected")
 
                     ts = int(time.time() * 1000)
                     last_warning[key] = {"warning": warn, "at": ts}
@@ -330,6 +439,11 @@ async def handle_offer(data: dict):
                         "yaw": yaw_s, "pitch": pitch_s, "dx": dx_s, "dy": dy_s,
                         "fps": last_metrics.get(key, {}).get("fps"), "label": warn, "at": ts
                     }
+
+                    # reader heartbeat (when frames flow)
+                    if now - last_heartbeat >= HEARTBEAT_S:
+                        log("READER_ALIVE", student_id, exam_id, label=warn)
+                        last_heartbeat = now
 
             asyncio.ensure_future(reader(), loop=_loop)
         else:

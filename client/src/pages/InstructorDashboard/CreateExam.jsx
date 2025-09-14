@@ -18,6 +18,9 @@ const CreateExam = () => {
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const instructorId = userData.id;
 
+  // examType state (Exam or Activity)
+  const [examType, setExamType] = useState("");
+
   const [examData, setExamData] = useState({
     title: "",
     description: "",
@@ -100,7 +103,7 @@ const CreateExam = () => {
     }
 
     setEnrolledStudents([...enrolledStudents, student]);
-    toast.success(`Added students.`);
+    toast.success(`Added student.`);
     setSelectedStudent("");
   };
 
@@ -124,10 +127,11 @@ const CreateExam = () => {
     const formData = new FormData();
     formData.append("title", title);
     formData.append("description", description);
-    formData.append("time", time);
+    formData.append("time", time); // ✅ always include duration
     formData.append("exam_date", examDate);
     formData.append("start_time", startTime);
     formData.append("instructor_id", instructorId);
+    formData.append("exam_type", examType); // ✅ send type
     formData.append("students", JSON.stringify(enrolledStudents));
 
     if (examFile) {
@@ -143,11 +147,11 @@ const CreateExam = () => {
           headers: { "Content-Type": "multipart/form-data" },
         }
       );
-      toast.success("Exam created successfully!");
+      toast.success(`${examType} created successfully!`);
       window.location.reload();
-      console.log("Exam Created:", res.data);
+      console.log(`${examType} Created:`, res.data);
     } catch (err) {
-      toast.error("Failed to save exam.");
+      toast.error("Failed to save.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -161,214 +165,266 @@ const CreateExam = () => {
   return (
     <Container fluid className="py-4 px-3 px-md-5">
       <ToastContainer autoClose={2500} />
-      <Card className="shadow-lg border-0 p-4">
-        <Card.Body>
-          <h2 className="text-center fw-bold mb-4">
-            <i className="bi bi-pencil-square me-2"></i>Create Exam
-          </h2>
 
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold">Title</Form.Label>
-            <Form.Control
-              type="text"
-              name="title"
-              value={examData.title}
-              onChange={handleExamChange}
-              placeholder="Enter exam title"
-            />
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold">Description</Form.Label>
-            <Form.Control
-              as="textarea"
-              rows={2}
-              name="description"
-              value={examData.description}
-              onChange={handleExamChange}
-              placeholder="Brief exam description"
-            />
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold">Duration (minutes)</Form.Label>
-            <Form.Control
-              type="number"
-              name="time"
-              value={examData.time}
-              min={1}
-              onChange={handleExamChange}
-            />
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold">Exam Date</Form.Label>
-            <Form.Control
-              type="date"
-              value={examDate}
-              onChange={(e) => setExamDate(e.target.value)}
-            />
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold">Start Time</Form.Label>
-            <Form.Control
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-            />
-          </Form.Group>
-
-          <Form.Group className="mb-4">
-            <Form.Label className="fw-semibold">
-              Upload Exam File (optional)
-            </Form.Label>
-            <Form.Control
-              type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              onChange={(e) => setExamFile(e.target.files[0])}
-            />
-          </Form.Group>
-
-          <hr />
-          <h5 className="fw-bold">Bulk Assign Students</h5>
-          <Row className="mb-3">
-            <Col md>
-              <Form.Select
-                name="course"
-                value={filters.course}
-                onChange={handleFilterChange}
-              >
-                <option value="">Select Course</option>
-                {courseOptions.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </Form.Select>
-            </Col>
-            <Col md>
-              <Form.Select
-                name="year"
-                value={filters.year}
-                onChange={handleFilterChange}
-              >
-                <option value="">Select Year</option>
-                {yearOptions.map((y) => (
-                  <option key={y}>{y}</option>
-                ))}
-              </Form.Select>
-            </Col>
-            <Col md>
-              <Form.Select
-                name="section"
-                value={filters.section}
-                onChange={handleFilterChange}
-              >
-                <option value="">Select Section</option>
-                {sectionOptions.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </Form.Select>
-            </Col>
-            <Col md={3}>
+      {/* Step 1: Choose Exam or Activity */}
+      {!examType ? (
+        <Card className="shadow-lg border-0 p-5 text-center">
+          <h3 className="fw-bold mb-4">Select What You Want to Create</h3>
+          <Row className="g-4 justify-content-center">
+            <Col xs={12} md={5}>
               <Button
-                className="w-100"
                 variant="primary"
-                onClick={handleBulkAssign}
+                size="lg"
+                className="w-100 py-3 d-flex align-items-center justify-content-center gap-2"
+                onClick={() => setExamType("Exam")}
               >
-                Add by Group
+                <i className="bi bi-journal-text fs-3"></i>
+                <span className="fw-semibold">Create Exam</span>
+              </Button>
+            </Col>
+            <Col xs={12} md={5}>
+              <Button
+                variant="info"
+                size="lg"
+                className="w-100 py-3 d-flex align-items-center justify-content-center gap-2"
+                onClick={() => setExamType("Activity")}
+              >
+                <i className="bi bi-pencil-square fs-3"></i>
+                <span className="fw-semibold">Create Activity</span>
               </Button>
             </Col>
           </Row>
+        </Card>
+      ) : (
+        /* Step 2: Show the full form after selection */
+        <Card className="shadow-lg border-0 p-4">
+          <Card.Body>
+            <h2 className="text-center fw-bold mb-4">
+              {examType === "Exam" ? (
+                <>
+                  <i className="bi bi-journal-text me-2"></i>Create Exam
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-pencil-square me-2"></i>Create Activity
+                </>
+              )}
+            </h2>
 
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold">
-              Add Individual Student
-            </Form.Label>
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold">Title</Form.Label>
+              <Form.Control
+                type="text"
+                name="title"
+                value={examData.title}
+                onChange={handleExamChange}
+                placeholder={`Enter ${examType.toLowerCase()} title`}
+              />
+            </Form.Group>
 
-            <Row className="mb-2">
-              <Col>
-                <Form.Label className="fw-semibold">Search Student</Form.Label>
-                <Form.Group>
-                  <div className="input-group">
-                    <span className="input-group-text bg-light">
-                      <FaSearch />
-                    </span>
-                    <Form.Control
-                      type="text"
-                      placeholder="Search by name or username"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </Form.Group>
-              </Col>
-            </Row>
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold">Description</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={2}
+                name="description"
+                value={examData.description}
+                onChange={handleExamChange}
+                placeholder={`Brief ${examType.toLowerCase()} description`}
+              />
+            </Form.Group>
 
-            <Row>
-              <Col md={9}>
+            {/* Duration always required (Exam & Activity) */}
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold">
+                Duration (minutes)
+              </Form.Label>
+              <Form.Control
+                type="number"
+                name="time"
+                value={examData.time}
+                min={1}
+                onChange={handleExamChange}
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold">{examType} Date</Form.Label>
+              <Form.Control
+                type="date"
+                value={examDate}
+                onChange={(e) => setExamDate(e.target.value)}
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold">Start Time</Form.Label>
+              <Form.Control
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-4">
+              <Form.Label className="fw-semibold">
+                Upload {examType} File or Instructions
+              </Form.Label>
+              <Form.Control
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+                onChange={(e) => setExamFile(e.target.files[0])}
+              />
+            </Form.Group>
+
+            <hr />
+            <h5 className="fw-bold">Bulk Assign Students</h5>
+            <Row className="mb-3">
+              <Col md>
                 <Form.Select
-                  value={selectedStudent}
-                  onChange={(e) => setSelectedStudent(e.target.value)}
+                  name="course"
+                  value={filters.course}
+                  onChange={handleFilterChange}
                 >
-                  <option value="">Select Student</option>
-                  {allStudents
-                    .filter((s) =>
-                      `${s.name} ${s.username}`
-                        .toLowerCase()
-                        .includes(searchTerm.toLowerCase())
-                    )
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.username})
-                      </option>
-                    ))}
+                  <option value="">Select Course</option>
+                  {courseOptions.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col md>
+                <Form.Select
+                  name="year"
+                  value={filters.year}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">Select Year</option>
+                  {yearOptions.map((y) => (
+                    <option key={y}>{y}</option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col md>
+                <Form.Select
+                  name="section"
+                  value={filters.section}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">Select Section</option>
+                  {sectionOptions.map((s) => (
+                    <option key={s}>{s}</option>
+                  ))}
                 </Form.Select>
               </Col>
               <Col md={3}>
                 <Button
                   className="w-100"
-                  variant="secondary"
-                  onClick={handleAddIndividual}
+                  variant="primary"
+                  onClick={handleBulkAssign}
                 >
-                  Add Student
+                  <i className="bi bi-people-fill me-2"></i>Add by Group
                 </Button>
               </Col>
             </Row>
-          </Form.Group>
 
-          {enrolledStudents.length > 0 && (
-            <Card className="mt-3 p-3 border-0 shadow-sm">
-              <h6 className="fw-semibold mb-3">Enrolled Students:</h6>
-              <ListGroup>
-                {enrolledStudents.map((student) => (
-                  <ListGroup.Item
-                    key={student.id}
-                    className="d-flex justify-content-between align-items-center"
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold">
+                Add Individual Student
+              </Form.Label>
+
+              <Row className="mb-2">
+                <Col>
+                  <Form.Label className="fw-semibold">
+                    Search Student
+                  </Form.Label>
+                  <Form.Group>
+                    <div className="input-group">
+                      <span className="input-group-text bg-light">
+                        <FaSearch />
+                      </span>
+                      <Form.Control
+                        type="text"
+                        placeholder="Search by name or username"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={9}>
+                  <Form.Select
+                    value={selectedStudent}
+                    onChange={(e) => setSelectedStudent(e.target.value)}
                   >
-                    {student.name}
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleRemoveStudent(student.id)}
-                    >
-                      Remove
-                    </Button>
-                  </ListGroup.Item>
-                ))}
-              </ListGroup>
-            </Card>
-          )}
+                    <option value="">Select Student</option>
+                    {allStudents
+                      .filter((s) =>
+                        `${s.name} ${s.username}`
+                          .toLowerCase()
+                          .includes(searchTerm.toLowerCase())
+                      )
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.username})
+                        </option>
+                      ))}
+                  </Form.Select>
+                </Col>
+                <Col md={3}>
+                  <Button
+                    className="w-100"
+                    variant="secondary"
+                    onClick={handleAddIndividual}
+                  >
+                    <i className="bi bi-person-plus-fill me-2"></i>Add
+                  </Button>
+                </Col>
+              </Row>
+            </Form.Group>
 
-          <Button
-            variant="success"
-            className="mt-4 w-100"
-            onClick={handleSaveExam}
-            disabled={loading}
-          >
-            {loading ? <Spinner size="sm" /> : "Save Exam"}
-          </Button>
-        </Card.Body>
-      </Card>
+            {enrolledStudents.length > 0 && (
+              <Card className="mt-3 p-3 border-0 shadow-sm">
+                <h6 className="fw-semibold mb-3">Enrolled Students:</h6>
+                <ListGroup>
+                  {enrolledStudents.map((student) => (
+                    <ListGroup.Item
+                      key={student.id}
+                      className="d-flex justify-content-between align-items-center"
+                    >
+                      {student.name}
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleRemoveStudent(student.id)}
+                      >
+                        <i className="bi bi-x-circle"></i>
+                      </Button>
+                    </ListGroup.Item>
+                  ))}
+                </ListGroup>
+              </Card>
+            )}
+
+            <Button
+              variant="success"
+              className="mt-4 w-100"
+              onClick={handleSaveExam}
+              disabled={loading}
+            >
+              {loading ? (
+                <Spinner size="sm" />
+              ) : (
+                <>
+                  <i className="bi bi-check2-circle me-2"></i>Save {examType}
+                </>
+              )}
+            </Button>
+          </Card.Body>
+        </Card>
+      )}
     </Container>
   );
 };

@@ -536,63 +536,27 @@ const TakeExam = () => {
           <Col xs={12} md={8} lg={6}>
             <Card className="p-4 shadow border-0 rounded-3">
               <Card.Body>
-                <Form.Group className="mb-3">
+                <Form.Group>
                   <Form.Label className="fw-semibold text-secondary">
-                    <i className="bi bi-list-task me-2"></i>Select an Exam
+                    <i className="bi bi-list-task me-2"></i>Select Exam /
+                    Activity
                   </Form.Label>
                   <Form.Select
                     onChange={handleExamSelect}
                     value={selectedExam ? selectedExam.id : ""}
-                    className="shadow-sm border-primary"
                   >
-                    <option value="">-- Choose an Exam --</option>
-                    {exams.length === 0 ? (
-                      <option disabled>No available exams</option>
-                    ) : (
-                      exams
-                        .filter((exam) => {
-                          const today = new Date().toISOString().split("T")[0];
-                          const examDate = exam.exam_date
-                            ? new Date(exam.exam_date)
-                                .toISOString()
-                                .split("T")[0]
-                            : null;
-                          return examDate === today && exam.start_time;
-                        })
-                        .map((exam) => {
-                          if (!exam.exam_date || !exam.start_time) return null;
-
-                          const formattedDate = new Date(
-                            exam.exam_date
-                          ).toLocaleDateString("en-US", {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          });
-
-                          const [hour, minute] = exam.start_time
-                            .split(":")
-                            .map(Number);
-                          const timeDate = new Date();
-                          timeDate.setHours(hour, minute, 0);
-                          const formattedTime = timeDate.toLocaleTimeString(
-                            [],
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: true,
-                            }
-                          );
-
-                          return (
-                            <option key={exam.id} value={exam.id}>
-                              {exam.title} • {formattedDate} @ {formattedTime} (
-                              {exam.duration_minutes} min)
-                            </option>
-                          );
-                        })
-                    )}
+                    <option value="">-- Choose --</option>
+                    {exams
+                      .filter((exam) => {
+                        const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+                        return exam.exam_date === today && exam.start_time;
+                      })
+                      .map((exam) => (
+                        <option key={exam.id} value={exam.id}>
+                          {exam.title} • {exam.exam_type} (
+                          {exam.duration_minutes || 0} min)
+                        </option>
+                      ))}
                   </Form.Select>
                 </Form.Group>
                 <div className="text-center mt-3">
@@ -600,9 +564,9 @@ const TakeExam = () => {
                     variant="success"
                     onClick={handleStartExam}
                     disabled={!selectedExam}
-                    className="w-100 shadow-sm"
+                    className="w-100"
                   >
-                    <i className="bi bi-play-fill me-2"></i>Start Exam
+                    <i className="bi bi-play-fill me-2"></i>Start
                   </Button>
                 </div>
               </Card.Body>
@@ -611,107 +575,69 @@ const TakeExam = () => {
         </Row>
       )}
 
-      {/* Exam View */}
+      {/* Taking Exam UI */}
       {isTakingExam && selectedExam && (
-        <Row className="justify-content-center mt-4">
-          <Col xs={12} lg={10}>
-            <Card className="p-4 shadow-lg border-0 rounded-3">
-              <Card.Body>
-                <h3
-                  className="text-center fw-bold"
-                  style={{ color: "#0d3b66" }}
-                >
+        <Row className="mt-4">
+          <Col lg={8}>
+            <Card className="shadow border-0 rounded-3">
+              <Card.Header className="bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 className="mb-0">
+                  <i className="bi bi-pencil-square me-2"></i>
                   {selectedExam.title}
-                </h3>
-
-                <ProgressBar
-                  animated
-                  now={
-                    ((selectedExam.duration_minutes * 60 - timer) /
-                      (selectedExam.duration_minutes * 60)) *
-                    100
-                  }
-                  variant="danger"
-                  className="my-3 rounded-pill"
-                />
-
-                <p className="text-center text-danger fw-semibold fs-5">
-                  <i className="bi bi-clock me-2"></i>
-                  Time Left: {formatTime(timer)}
-                </p>
-
-                {/* Camera Feed */}
-                <div className="text-center mt-4">
-                  <h5 className="fw-semibold mb-2 text-secondary">
-                    <i className="bi bi-camera-video me-2"></i>
-                    Live Camera Feed
-                  </h5>
-
-                  <div className="border rounded-3 p-2 position-relative shadow-sm">
-                    <span
-                      ref={overlayRef}
-                      className="position-absolute top-0 start-0 m-2 px-2 py-1 text-white rounded"
-                      style={{
-                        fontSize: "0.85rem",
-                        background: "rgba(0,0,0,0.7)",
-                        zIndex: 10,
-                      }}
-                    >
-                      Looking Forward
-                    </span>
-
-                    <video
-                      ref={videoPreviewRef}
-                      className="img-fluid rounded-3"
-                      style={{
-                        width: "100%",
-                        height: "auto",
-                        background: "#f7f7f7",
-                      }}
-                      autoPlay
-                      playsInline
-                      muted
-                    />
-                  </div>
+                </h5>
+                <span className="badge bg-light text-dark">
+                  {selectedExam.exam_type}
+                </span>
+              </Card.Header>
+              <Card.Body>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <span className="fw-semibold">
+                    Time Remaining: {formatTime(timer)}
+                  </span>
+                  <ProgressBar
+                    now={(timer / (selectedExam.duration_minutes * 60)) * 100}
+                    className="flex-grow-1 mx-3"
+                    variant="success"
+                  />
+                  <span>{selectedExam.duration_minutes} min</span>
                 </div>
-
-                {/* Exam Content */}
-                {examText && (
-                  <div className="text-enter mt-4 px-4">
-                    <h5 className="fw-semibold mb-3 text-secondary">
-                      <i className="bi bi-file-earmark-text me-2"></i>
-                      Exam Details
-                    </h5>
-                    <div
-                      style={{
-                        background: "#f9f9f9",
-                        padding: "20px",
-                        borderRadius: "10px",
-                        whiteSpace: "pre-wrap",
-                        lineHeight: "1.6",
-                        fontSize: "1rem",
-                        boxShadow: "inset 0 1px 3px rgba(0,0,0,0.1)",
-                      }}
-                    >
-                      {examText || "Loading exam content..."}
-                    </div>
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <div className="d-flex justify-content-center mt-4">
-                  {isSubmitting ? (
-                    <Spinner />
-                  ) : (
-                    <Button
-                      variant="primary"
-                      onClick={handleSubmitExam}
-                      className="px-5 shadow-sm"
-                    >
-                      <i className="bi bi-check2-circle me-2"></i>
-                      Submit Exam
-                    </Button>
-                  )}
+                <div className="border rounded p-3 bg-light-subtle">
+                  <pre className="mb-0">{examText}</pre>
+                </div>
+                <div className="text-end mt-3">
+                  <Button
+                    variant="danger"
+                    onClick={handleSubmitExam}
+                    disabled={isSubmitting}
+                  >
+                    <i className="bi bi-box-arrow-up me-2"></i>
+                    {isSubmitting ? "Submitting..." : "Submit"}
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col lg={4} className="mt-3 mt-lg-0">
+            <Card className="shadow border-0 rounded-3">
+              <Card.Header className="bg-dark text-white">
+                <i className="bi bi-camera-video me-2"></i>Live Camera
+              </Card.Header>
+              <Card.Body className="p-0 position-relative">
+                <video
+                  ref={videoPreviewRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  style={{ width: "100%", borderRadius: "0 0 0.5rem 0.5rem" }}
+                />
+                <div
+                  ref={overlayRef}
+                  className="position-absolute top-0 start-0 m-2 px-2 py-1 rounded text-white small"
+                  style={{
+                    background: "rgba(0,0,0,0.6)",
+                  }}
+                >
+                  Looking Forward
                 </div>
               </Card.Body>
             </Card>
@@ -719,20 +645,19 @@ const TakeExam = () => {
         </Row>
       )}
 
-      {/* Captured Modal */}
+      {/* Captured Logs Modal */}
       <Modal
         show={showCapturedModal}
         onHide={() => setShowCapturedModal(false)}
         size="lg"
         centered
       >
-        <Modal.Header closeButton className="bg-dark text-white">
+        <Modal.Header closeButton>
           <Modal.Title>
-            <i className="bi bi-image me-2"></i>
-            Captured Behavior Logs
+            <i className="bi bi-list-check me-2"></i>Behavior Logs
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body style={{ maxHeight: "70vh", overflowY: "auto" }}>
           {classifiedLogs.length > 0 ? (
             <Row>
               {classifiedLogs.map((log, index) => (
@@ -743,15 +668,22 @@ const TakeExam = () => {
                   md={4}
                   className="mb-4 text-center"
                 >
-                  <img
-                    src={`data:image/jpeg;base64,${log.image_base64}`}
-                    alt={`Captured ${index}`}
-                    className="img-fluid rounded shadow-sm border mb-2"
-                  />
-                  <div className="fw-semibold">
-                    <i className="bi bi-exclamation-circle me-1"></i>
-                    Warning: {log.warning_type}
+                  {/* Captured Image */}
+                  {log.image_base64 && (
+                    <img
+                      src={`data:image/jpeg;base64,${log.image_base64}`}
+                      alt={`Captured ${index}`}
+                      className="img-fluid rounded shadow-sm border mb-2"
+                    />
+                  )}
+
+                  {/* Warning type */}
+                  <div className="fw-semibold text-danger">
+                    <i className="bi bi-exclamation-triangle me-1"></i>
+                    Warning: {log.warning_type || "Unknown"}
                   </div>
+
+                  {/* Classification */}
                   <div
                     className={`fw-bold ${
                       log.classification_label === "Cheating"
@@ -766,9 +698,17 @@ const TakeExam = () => {
               ))}
             </Row>
           ) : (
-            <p className="text-center text-muted">No behavior logs found.</p>
+            <p>No behavior logs found.</p>
           )}
         </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="secondary"
+            onClick={() => setShowCapturedModal(false)}
+          >
+            Close
+          </Button>
+        </Modal.Footer>
       </Modal>
     </Container>
   );

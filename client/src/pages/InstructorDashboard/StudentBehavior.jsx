@@ -45,7 +45,7 @@ const StudentBehavior = () => {
         );
         setExams(res.data);
       } catch (err) {
-        toast.error("Failed to load exams");
+        toast.error("Failed to load exams & activities");
       } finally {
         setLoading(false);
       }
@@ -54,7 +54,7 @@ const StudentBehavior = () => {
     if (instructorId) fetchExams();
   }, [instructorId]);
 
-  // if the exam ended change the status of student the suspicius behavior
+  // auto-update current exam student statuses
   useEffect(() => {
     let interval;
 
@@ -83,19 +83,15 @@ const StudentBehavior = () => {
 
         setStudents(merged);
 
-        // Now also check if exam officially ended — then reset behavior counts
-        // --- Build start & end times robustly ---
+        // check if exam ended
         const now = new Date();
-
         const toStartDate = (dateStr, timeStr) => {
-          const d = new Date(dateStr); // local date at 00:00
+          const d = new Date(dateStr);
           if (Number.isNaN(d.getTime())) return null;
-
           let h = 0,
             m = 0,
             s = 0;
           if (/am|pm/i.test(timeStr)) {
-            // 12-hour format
             const [hh, mm, ss = "0"] = timeStr
               .replace(/\s?(AM|PM)/i, "")
               .split(":");
@@ -106,13 +102,11 @@ const StudentBehavior = () => {
             if (isPM && h < 12) h += 12;
             if (!isPM && h === 12) h = 0;
           } else {
-            // 24-hour format
             const [HH, MM, SS = "0"] = timeStr.split(":");
             h = parseInt(HH, 10);
             m = parseInt(MM, 10);
             s = parseInt(SS, 10);
           }
-
           d.setHours(h, m, s, 0);
           return d;
         };
@@ -126,10 +120,7 @@ const StudentBehavior = () => {
           ? new Date(startTime.getTime() + durationMin * 60_000)
           : null;
 
-        console.log(startTime + " " + endTime + " " + now);
-
         if (startTime && endTime && now >= endTime) {
-          // Loop through students who haven’t submitted and reset status
           const unsubmittedStudents = studentsData.filter(
             (student) =>
               !submittedIds.includes(student.student_id || student.id)
@@ -158,34 +149,28 @@ const StudentBehavior = () => {
 
   const groupExams = () => {
     const now = new Date();
-    const todayDateStr = now.toISOString().split("T")[0]; // 'YYYY-MM-DD'
+    const todayDateStr = now.toISOString().split("T")[0];
     const past = [];
     const current = [];
 
     exams.forEach((exam) => {
       if (!exam.exam_date || !exam.start_time || !exam.duration_minutes) return;
-
-      // Combine exam_date and start_time
       const [hour, minute] = exam.start_time.split(":").map(Number);
       const startDateTime = new Date(exam.exam_date);
       startDateTime.setHours(hour, minute, 0, 0);
-
       const endDateTime = new Date(startDateTime);
       endDateTime.setMinutes(
         endDateTime.getMinutes() + parseInt(exam.duration_minutes)
       );
-
       const examDateStr = startDateTime.toISOString().split("T")[0];
 
       if (examDateStr === todayDateStr && now <= endDateTime) {
-        // Today’s exam and not yet finished
         current.push({
           ...exam,
           startTimeObj: startDateTime,
           endTimeObj: endDateTime,
         });
       } else if (endDateTime < now) {
-        // Exam ended regardless of date
         past.push({
           ...exam,
           startTimeObj: startDateTime,
@@ -207,22 +192,19 @@ const StudentBehavior = () => {
         `http://localhost:5000/api/exam-assigned-students/${exam.id}`
       );
       const studentsData = studentRes.data;
-
-      // Get submitted user_ids
       const submittedRes = await axios.get(
         `http://localhost:5000/api/exam-submissions/${exam.id}`
       );
-      const submittedIds = submittedRes.data; // array of user_id
+      const submittedIds = submittedRes.data;
 
-      // Add `has_submitted` property to each student
       const merged = studentsData.map((student) => ({
         ...student,
         has_submitted: submittedIds.includes(student.student_id || student.id),
       }));
       setStudents(merged);
       setShowCurrentExamModal(true);
-    } catch (err) {
-      toast.error("Failed to load current exam students");
+    } catch {
+      toast.error("Failed to load current exam/activity students");
     }
   };
 
@@ -233,7 +215,6 @@ const StudentBehavior = () => {
       const res = await axios.get(
         `http://localhost:5000/api/exam-behavior/${exam.id}`
       );
-
       const sortedStudents = res.data.sort((a, b) => {
         const statusPriority = {
           Cheated: 0,
@@ -242,11 +223,10 @@ const StudentBehavior = () => {
         };
         return statusPriority[a.exam_status] - statusPriority[b.exam_status];
       });
-
       setStudents(sortedStudents);
       setShowPastExamModal(true);
-    } catch (err) {
-      toast.error("Failed to load past exam data");
+    } catch {
+      toast.error("Failed to load past exam/activity data");
     }
   };
 
@@ -259,7 +239,7 @@ const StudentBehavior = () => {
       );
       setBehaviorLogs(res.data);
       setShowBehaviorModal(true);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load behavior logs");
     }
   };
@@ -272,15 +252,12 @@ const StudentBehavior = () => {
       day: "numeric",
     });
 
-  // Format time range like: 07:00 AM - 07:20 AM
   const formatTimeRange = (examDate, startTime, duration) => {
     const [hour, minute] = startTime.split(":").map(Number);
     const start = new Date(examDate);
     start.setHours(hour, minute, 0, 0);
-
     const end = new Date(start);
     end.setMinutes(end.getMinutes() + parseInt(duration));
-
     return `${start.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
@@ -295,8 +272,6 @@ const StudentBehavior = () => {
   return (
     <Container className="py-4">
       <ToastContainer />
-
-      {/* Page Header */}
       <h2 className="text-start fw-bold mb-4" style={{ color: "#0d0e0eff" }}>
         <BsCalendarEvent className="me-2" />
         Student Behavior Overview
@@ -310,14 +285,14 @@ const StudentBehavior = () => {
         <Row>
           {[
             {
-              label: "Current Exams",
+              label: "Current Exams & Activities",
               color: "success",
               icon: <BsCheckCircle className="me-2" />,
               data: current,
               handler: handleCurrentExamClick,
             },
             {
-              label: "Past Exams",
+              label: "Past Exams & Activities",
               color: "secondary",
               icon: <BsBoxArrowInDownLeft className="me-2" />,
               data: past,
@@ -356,7 +331,9 @@ const StudentBehavior = () => {
                       </Card>
                     ))
                   ) : (
-                    <p className="text-muted text-center">No exams</p>
+                    <p className="text-muted text-center">
+                      No exams or activities
+                    </p>
                   )}
                 </Card.Body>
               </Card>
@@ -369,13 +346,13 @@ const StudentBehavior = () => {
       <Modal
         show={showCurrentExamModal}
         onHide={() => setShowCurrentExamModal(false)}
-        size="xl" // ✅ Wider modal
+        size="xl"
         centered
       >
         <Modal.Header closeButton className="bg-dark text-white">
           <Modal.Title>
             <i className="bi bi-people me-2"></i>
-            Students Taking Exam – {selectedExam?.title}
+            Students Taking Exam/Activity – {selectedExam?.title}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -392,7 +369,7 @@ const StudentBehavior = () => {
                   <th>Name</th>
                   <th>Username</th>
                   <th>Login</th>
-                  <th>Exam</th>
+                  <th>Exam/Activity</th>
                   <th className="text-center">Suspicious</th>
                   <th>Submitted</th>
                   <th className="text-center">Action</th>
@@ -403,30 +380,20 @@ const StudentBehavior = () => {
                   <tr key={student.student_id}>
                     <td className="fw-semibold">{student.name}</td>
                     <td className="text-muted">{student.username}</td>
-
-                    {/* Login Status */}
                     <td>
                       {student.is_login ? (
-                        <span className="badge bg-success">
-                          <i className="bi bi-check-circle me-1"></i> Yes
-                        </span>
+                        <span className="badge bg-success">Yes</span>
                       ) : (
                         <span className="badge bg-secondary">No</span>
                       )}
                     </td>
-
-                    {/* Exam Status */}
                     <td>
                       {student.is_taking_exam ? (
-                        <span className="badge bg-info text-dark">
-                          <i className="bi bi-pencil-square me-1"></i> Taking
-                        </span>
+                        <span className="badge bg-info text-dark">Taking</span>
                       ) : (
                         <span className="badge bg-secondary">No</span>
                       )}
                     </td>
-
-                    {/* Suspicious Count */}
                     <td className="text-center">
                       {student.has_submitted ? (
                         <span className="badge bg-success">Submitted</span>
@@ -436,25 +403,18 @@ const StudentBehavior = () => {
                         </span>
                       )}
                     </td>
-
-                    {/* Submitted */}
                     <td>
                       {student.has_submitted ? (
-                        <span className="badge bg-success">
-                          <i className="bi bi-check2-circle me-1"></i> Yes
-                        </span>
+                        <span className="badge bg-success">Yes</span>
                       ) : (
                         <span className="badge bg-secondary">No</span>
                       )}
                     </td>
-
-                    {/* Action */}
                     <td className="text-center">
                       <Button
                         variant="outline-primary"
                         size="sm"
                         onClick={() => handleStudentClick(student)}
-                        className="d-flex align-items-center justify-content-center"
                       >
                         <i className="bi bi-eye me-1"></i> View
                       </Button>
@@ -465,7 +425,6 @@ const StudentBehavior = () => {
             </Table>
           ) : (
             <p className="text-muted text-center">
-              <i className="bi bi-info-circle me-2"></i>
               No assigned students found.
             </p>
           )}
@@ -482,7 +441,7 @@ const StudentBehavior = () => {
         <Modal.Header closeButton className="bg-dark text-white">
           <Modal.Title>
             <i className="bi bi-archive me-2"></i>
-            Past Exam – {selectedExam?.title}
+            Past Exam/Activity – {selectedExam?.title}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -525,8 +484,7 @@ const StudentBehavior = () => {
             </Table>
           ) : (
             <p className="text-muted text-center">
-              <i className="bi bi-info-circle me-2"></i>No behavior data
-              available.
+              No behavior data available.
             </p>
           )}
         </Modal.Body>
@@ -552,7 +510,6 @@ const StudentBehavior = () => {
               {behaviorLogs.map((log, idx) => (
                 <Col md={4} key={idx} className="mb-4">
                   <Card className="shadow-sm h-100">
-                    {" "}
                     <Image
                       src={`data:image/jpeg;base64,${log.image_base64}`}
                       alt="Suspicious"

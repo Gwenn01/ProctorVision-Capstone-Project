@@ -7,6 +7,9 @@ import {
   Card,
   Form,
   Spinner,
+  Tabs,
+  Tab,
+  Badge,
 } from "react-bootstrap";
 import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
@@ -14,6 +17,7 @@ import "react-toastify/dist/ReactToastify.css";
 
 const ManageExam = () => {
   const [exams, setExams] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedExam, setSelectedExam] = useState(null);
   const [enrolledStudents, setEnrolledStudents] = useState([]);
@@ -31,7 +35,8 @@ const ManageExam = () => {
         const res = await axios.get(
           `http://localhost:5000/api/exams-instructor/${instructorId}`
         );
-        setExams(res.data);
+        setExams(res.data.filter((e) => e.exam_type === "Exam"));
+        setActivities(res.data.filter((e) => e.exam_type === "Activity"));
       } catch (err) {
         console.error("Failed to fetch exams", err);
       }
@@ -57,7 +62,7 @@ const ManageExam = () => {
   };
 
   const handleViewExam = (exam) => {
-    setSelectedExam({ ...exam }); // shallow clone for safe editing
+    setSelectedExam({ ...exam });
     fetchStudents(exam.id);
     setShowModal(true);
   };
@@ -65,14 +70,20 @@ const ManageExam = () => {
   const handleDeleteExam = async (exam) => {
     const examId = exam.id;
 
-    if (window.confirm("Are you sure you want to delete this exam?")) {
+    if (
+      window.confirm(`Are you sure you want to delete this ${exam.exam_type}?`)
+    ) {
       try {
         await axios.delete(`http://localhost:5000/api/exams/${examId}`);
-        setExams((prev) => prev.filter((e) => e.id !== examId));
-        toast.success("Exam deleted successfully");
+        if (exam.exam_type === "Exam") {
+          setExams((prev) => prev.filter((e) => e.id !== examId));
+        } else {
+          setActivities((prev) => prev.filter((e) => e.id !== examId));
+        }
+        toast.success(`${exam.exam_type} deleted successfully`);
       } catch (err) {
-        console.error("Failed to delete exam", err);
-        toast.error("Failed to delete exam.");
+        console.error("Failed to delete", err);
+        toast.error(`Failed to delete ${exam.exam_type}.`);
       }
     }
   };
@@ -83,7 +94,7 @@ const ManageExam = () => {
     );
 
     if (alreadyEnrolled) {
-      toast.warning("Student is already enrolled in this exam.");
+      toast.warning("Student is already enrolled.");
       return;
     }
 
@@ -124,92 +135,128 @@ const ManageExam = () => {
           start_time: selectedExam.start_time,
         }
       );
-      toast.success("Exam updated successfully!");
+      toast.success(`${selectedExam.exam_type} updated successfully!`);
       window.location.reload();
     } catch (err) {
-      toast.error("Failed to update exam.");
+      toast.error(`Failed to update ${selectedExam.exam_type}.`);
     }
   };
+
+  const renderTable = (items, type) => (
+    <Card className="shadow-sm border-0 p-3">
+      <div className="table-responsive">
+        <Table striped bordered hover className="align-middle mb-0">
+          <thead className="table-dark text-center">
+            <tr>
+              <th>Title</th>
+              <th>Description</th>
+              <th>Duration</th>
+              <th>Date</th>
+              <th>Start Time</th>
+              <th>File</th>
+              <th className="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length > 0 ? (
+              items.map((exam) => (
+                <tr key={exam.id}>
+                  <td className="fw-semibold">{exam.title}</td>
+                  <td>{exam.description}</td>
+                  <td>{exam.duration_minutes} min</td>
+                  <td>{exam.exam_date}</td>
+                  <td>{exam.start_time}</td>
+                  <td>
+                    {exam.exam_file ? (
+                      <a
+                        href={`http://localhost:5000/${exam.exam_file.replaceAll(
+                          "\\",
+                          "/"
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View File
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="text-center">
+                    <div className="d-flex justify-content-center gap-2">
+                      <Button
+                        variant="info"
+                        size="sm"
+                        onClick={() => handleViewExam(exam)}
+                      >
+                        <i className="bi bi-eye me-1"></i> View
+                      </Button>
+
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDeleteExam(exam)}
+                      >
+                        <i className="bi bi-trash me-1"></i> Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="7" className="text-center text-muted">
+                  No {type.toLowerCase()}s found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </Table>
+      </div>
+    </Card>
+  );
 
   return (
     <Container fluid className="py-4 px-3 px-md-5">
       <ToastContainer autoClose={3000} />
       <h2 className="mb-4 fw-bold text-center text-md-start">
-        <i className="bi bi-journal-bookmark-fill me-2"></i>Manage Exams
+        <i className="bi bi-journal-bookmark-fill me-2"></i>
+        Manage Exams & Activities
       </h2>
 
-      <Card className="shadow-sm border-0 p-3">
-        <div className="table-responsive">
-          <Table striped bordered hover className="align-middle mb-0">
-            <thead className="table-dark">
-              <tr>
-                <th>Title</th>
-                <th>Description</th>
-                <th>Duration</th>
-                <th>Exam Date</th>
-                <th>Start Time</th>
-                <th>Exam File</th>
-                <th className="text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {exams.length > 0 ? (
-                exams.map((exam) => (
-                  <tr key={exam.id}>
-                    <td>{exam.title}</td>
-                    <td>{exam.description}</td>
-                    <td>{exam.duration_minutes} min</td>
-                    <td>{exam.exam_date}</td>
-                    <td>{exam.start_time}</td>
-                    <td>
-                      {exam.exam_file ? (
-                        <a
-                          href={`http://localhost:5000/${exam.exam_file.replaceAll(
-                            "\\",
-                            "/"
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View File
-                        </a>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="text-center">
-                      <div className="d-flex justify-content-center gap-2">
-                        <Button
-                          variant="info"
-                          size="sm"
-                          onClick={() => handleViewExam(exam)}
-                        >
-                          <i className="bi bi-eye me-1"></i> View
-                        </Button>
-
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handleDeleteExam(exam)}
-                        >
-                          <i className="bi bi-trash me-1"></i> Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="7" className="text-center text-muted">
-                    No exams found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
-        </div>
+      {/* Tabs with better styling */}
+      <Card className="shadow-lg border-0">
+        <Card.Body>
+          <Tabs
+            defaultActiveKey="exams"
+            id="exams-activities-tabs"
+            className="mb-4 nav-justified"
+          >
+            <Tab
+              eventKey="exams"
+              title={
+                <span className="fw-semibold">
+                  <i className="bi bi-journal-text me-2"></i> Exams
+                </span>
+              }
+            >
+              {renderTable(exams, "Exam")}
+            </Tab>
+            <Tab
+              eventKey="activities"
+              title={
+                <span className="fw-semibold">
+                  <i className="bi bi-pencil-square me-2"></i> Activities
+                </span>
+              }
+            >
+              {renderTable(activities, "Activity")}
+            </Tab>
+          </Tabs>
+        </Card.Body>
       </Card>
 
+      {/* Modal */}
       {selectedExam && (
         <Modal
           show={showModal}
@@ -217,10 +264,16 @@ const ManageExam = () => {
           centered
           size="lg"
         >
-          <Modal.Header closeButton>
+          <Modal.Header closeButton className="bg-dark text-white">
             <Modal.Title>
               <i className="bi bi-info-circle me-2"></i>
-              Edit Exam: {selectedExam.title}
+              Edit {selectedExam.title}{" "}
+              <Badge
+                bg={selectedExam.exam_type === "Exam" ? "primary" : "info"}
+                className="ms-2"
+              >
+                {selectedExam.exam_type}
+              </Badge>
             </Modal.Title>
           </Modal.Header>
           <Modal.Body style={{ maxHeight: "500px", overflowY: "auto" }}>
@@ -265,7 +318,7 @@ const ManageExam = () => {
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label>Exam Date</Form.Label>
+              <Form.Label>Date</Form.Label>
               <Form.Control
                 type="date"
                 value={
@@ -300,7 +353,7 @@ const ManageExam = () => {
 
             {selectedExam.exam_file && (
               <div className="mb-3">
-                <strong>Exam File:</strong>{" "}
+                <strong>File:</strong>{" "}
                 <a
                   href={`http://localhost:5000/${selectedExam.exam_file}`}
                   target="_blank"
@@ -313,7 +366,7 @@ const ManageExam = () => {
 
             <Button
               variant="primary"
-              className="mb-3"
+              className="mb-3 w-100"
               onClick={handleSaveChanges}
             >
               <i className="bi bi-save me-1"></i> Save Changes
@@ -382,11 +435,11 @@ const ManageExam = () => {
               </Form.Select>
               <Button
                 variant="success"
-                className="mt-2"
+                className="mt-2 w-100"
                 onClick={handleAddStudent}
                 disabled={!selectedStudent}
               >
-                Add Student
+                <i className="bi bi-person-plus-fill me-1"></i>Add Student
               </Button>
             </Form.Group>
           </Modal.Body>

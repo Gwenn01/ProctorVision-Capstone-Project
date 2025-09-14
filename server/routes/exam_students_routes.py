@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from database.connection import get_db_connection
 from datetime import datetime, timedelta
+import email.utils
 
 exam_students_bp = Blueprint('exam_students_bp', __name__)
 
@@ -23,7 +24,7 @@ def get_all_students():
         if conn:
             conn.close()
 
-# Get students enrolled in a specific exam
+# Get students enrolled in a specific exam/activity
 @exam_students_bp.route("/exam_students/<int:exam_id>", methods=["GET"])
 def get_enrolled_students(exam_id):
     try:
@@ -43,7 +44,7 @@ def get_enrolled_students(exam_id):
         if conn:
             conn.close()
 
-# Add a student to an exam
+# Add a student to an exam/activity
 @exam_students_bp.route("/exam_students", methods=["POST"])
 def add_student_to_exam():
     data = request.json
@@ -64,7 +65,7 @@ def add_student_to_exam():
         if conn:
             conn.close()
 
-# Remove a student from an exam
+# Remove a student from an exam/activity
 @exam_students_bp.route("/exam_students/<int:exam_id>/<int:student_id>", methods=["DELETE"])
 def remove_student_from_exam(exam_id, student_id):
     try:
@@ -82,7 +83,7 @@ def remove_student_from_exam(exam_id, student_id):
         if conn:
             conn.close()
 
-#update studetn exam
+# Update exam/activity
 @exam_students_bp.route("/update-exams/<int:exam_id>", methods=["PUT"])
 def update_exam(exam_id):
     data = request.get_json()
@@ -97,12 +98,9 @@ def update_exam(exam_id):
     exam_date = None
     if exam_date_raw:
         try:
-            # Try ISO format first
             exam_date = datetime.strptime(exam_date_raw, "%Y-%m-%d").strftime("%Y-%m-%d")
         except ValueError:
             try:
-                # Try RFC 1123 fallback
-                import email.utils
                 parsed_dt = email.utils.parsedate_to_datetime(exam_date_raw)
                 exam_date = parsed_dt.strftime("%Y-%m-%d")
             except Exception as e:
@@ -132,8 +130,7 @@ def update_exam(exam_id):
         if conn:
             conn.close()
 
-
-# Get all exams by instructor 
+# Get all exams/activities by instructor
 @exam_students_bp.route("/exams-instructor/<int:instructor_id>", methods=["GET"])
 def get_exams_by_instructor(instructor_id):
     conn = None
@@ -142,27 +139,41 @@ def get_exams_by_instructor(instructor_id):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        query = "SELECT * FROM exams WHERE instructor_id = %s"
-        print(f"Executing query: {query}")
+        query = """
+            SELECT 
+                id,
+                instructor_id,
+                title,
+                description,
+                duration_minutes,
+                exam_date,
+                start_time,
+                exam_file,
+                exam_type,     
+                created_at
+            FROM exams
+            WHERE instructor_id = %s
+            ORDER BY id DESC
+        """
         cursor.execute(query, (instructor_id,))
         
         exams = cursor.fetchall()
 
-        # Fix non-serializable fields
+        # Fix serialization for date & time fields
         for exam in exams:
-            # Convert start_time (timedelta) to HH:MM format
             if isinstance(exam.get("start_time"), timedelta):
                 total_seconds = int(exam["start_time"].total_seconds())
                 hours = total_seconds // 3600
                 minutes = (total_seconds % 3600) // 60
                 exam["start_time"] = f"{hours:02}:{minutes:02}"
 
-            # Convert exam_date and created_at if datetime
-            for field in ["exam_date", "created_at"]:
-                if isinstance(exam.get(field), datetime):
-                    exam[field] = exam[field].strftime("%Y-%m-%d %H:%M:%S")
+            if isinstance(exam.get("exam_date"), datetime):
+                exam["exam_date"] = exam["exam_date"].strftime("%Y-%m-%d")
 
-        print(f"Found {len(exams)} exams.")
+            if isinstance(exam.get("created_at"), datetime):
+                exam["created_at"] = exam["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+
+        print(f"Found {len(exams)} exams/activities.")
         return jsonify(exams), 200
 
     except Exception as e:

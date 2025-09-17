@@ -7,6 +7,8 @@ import {
   Row,
   Col,
   ListGroup,
+  Modal,
+  Accordion,
 } from "react-bootstrap";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
@@ -18,9 +20,7 @@ const CreateExam = () => {
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const instructorId = userData.id;
 
-  // examType state (Exam or Activity)
   const [examType, setExamType] = useState("");
-
   const [examData, setExamData] = useState({
     title: "",
     description: "",
@@ -34,14 +34,14 @@ const CreateExam = () => {
   const [allStudents, setAllStudents] = useState([]);
   const [enrolledStudents, setEnrolledStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState("");
-  const [filters, setFilters] = useState({
-    course: "",
-    year: "",
-    section: "",
-  });
+  const [filters, setFilters] = useState({ course: "", year: "", section: "" });
 
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Questions + preview modal
+  const [questions, setQuestions] = useState([]);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     fetchAllStudents();
@@ -111,6 +111,46 @@ const CreateExam = () => {
     setEnrolledStudents(enrolledStudents.filter((s) => s.id !== id));
   };
 
+  // Question Handlers
+  const addQuestion = () => {
+    setQuestions([
+      ...questions,
+      { questionText: "", options: ["", ""], correctAnswer: null },
+    ]);
+  };
+
+  const updateQuestionText = (qIndex, value) => {
+    const updated = [...questions];
+    updated[qIndex].questionText = value;
+    setQuestions(updated);
+  };
+
+  const updateOption = (qIndex, oIndex, value) => {
+    const updated = [...questions];
+    updated[qIndex].options[oIndex] = value;
+    setQuestions(updated);
+  };
+
+  const addOption = (qIndex) => {
+    const updated = [...questions];
+    updated[qIndex].options.push("");
+    setQuestions(updated);
+  };
+
+  const removeOption = (qIndex, oIndex) => {
+    const updated = [...questions];
+    updated[qIndex].options = updated[qIndex].options.filter(
+      (_, i) => i !== oIndex
+    );
+    setQuestions(updated);
+  };
+
+  const selectCorrectAnswer = (qIndex, oIndex) => {
+    const updated = [...questions];
+    updated[qIndex].correctAnswer = oIndex;
+    setQuestions(updated);
+  };
+
   const handleSaveExam = async () => {
     const { title, description, time } = examData;
 
@@ -124,15 +164,21 @@ const CreateExam = () => {
       return;
     }
 
+    if (questions.length === 0) {
+      toast.warning("Please add at least one question.");
+      return;
+    }
+
     const formData = new FormData();
     formData.append("title", title);
     formData.append("description", description);
-    formData.append("time", time); // ✅ always include duration
+    formData.append("time", time);
     formData.append("exam_date", examDate);
     formData.append("start_time", startTime);
     formData.append("instructor_id", instructorId);
-    formData.append("exam_type", examType); // ✅ send type
+    formData.append("exam_type", examType);
     formData.append("students", JSON.stringify(enrolledStudents));
+    formData.append("questions", JSON.stringify(questions));
 
     if (examFile) {
       formData.append("exam_file", examFile);
@@ -143,9 +189,7 @@ const CreateExam = () => {
       const res = await axios.post(
         "http://localhost:5000/api/create-exam",
         formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
+        { headers: { "Content-Type": "multipart/form-data" } }
       );
       toast.success(`${examType} created successfully!`);
       window.location.reload();
@@ -162,11 +206,38 @@ const CreateExam = () => {
   const yearOptions = [...new Set(allStudents.map((s) => s.year))];
   const sectionOptions = [...new Set(allStudents.map((s) => s.section))];
 
+  const isInvalid = (value) => !value || value === "";
+
+  // handle pasre exam from pdf or words
+  const handleUploadQuestionsFile = async (file) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      const res = await axios.post(
+        "http://localhost:5000/api/parse-questions",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+      // Merge parsed questions into state
+      setQuestions([...questions, ...res.data.questions]);
+      toast.success("Questions imported! You can now edit them.");
+    } catch (err) {
+      toast.error("Failed to parse questions.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Container fluid className="py-4 px-3 px-md-5">
       <ToastContainer autoClose={2500} />
 
-      {/* Step 1: Choose Exam or Activity */}
       {!examType ? (
         <Card className="shadow-lg border-0 p-5 text-center">
           <h3 className="fw-bold mb-4">Select What You Want to Create</h3>
@@ -177,6 +248,7 @@ const CreateExam = () => {
                 size="lg"
                 className="w-100 py-3 d-flex align-items-center justify-content-center gap-2"
                 onClick={() => setExamType("Exam")}
+                disabled={loading}
               >
                 <i className="bi bi-journal-text fs-3"></i>
                 <span className="fw-semibold">Create Exam</span>
@@ -188,6 +260,7 @@ const CreateExam = () => {
                 size="lg"
                 className="w-100 py-3 d-flex align-items-center justify-content-center gap-2"
                 onClick={() => setExamType("Activity")}
+                disabled={loading}
               >
                 <i className="bi bi-pencil-square fs-3"></i>
                 <span className="fw-semibold">Create Activity</span>
@@ -196,7 +269,6 @@ const CreateExam = () => {
           </Row>
         </Card>
       ) : (
-        /* Step 2: Show the full form after selection */
         <Card className="shadow-lg border-0 p-4">
           <Card.Body>
             <h2 className="text-center fw-bold mb-4">
@@ -211,6 +283,7 @@ const CreateExam = () => {
               )}
             </h2>
 
+            {/* Title */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">Title</Form.Label>
               <Form.Control
@@ -219,9 +292,12 @@ const CreateExam = () => {
                 value={examData.title}
                 onChange={handleExamChange}
                 placeholder={`Enter ${examType.toLowerCase()} title`}
+                className={isInvalid(examData.title) ? "is-invalid" : ""}
+                disabled={loading}
               />
             </Form.Group>
 
+            {/* Description */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">Description</Form.Label>
               <Form.Control
@@ -231,10 +307,12 @@ const CreateExam = () => {
                 value={examData.description}
                 onChange={handleExamChange}
                 placeholder={`Brief ${examType.toLowerCase()} description`}
+                className={isInvalid(examData.description) ? "is-invalid" : ""}
+                disabled={loading}
               />
             </Form.Group>
 
-            {/* Duration always required (Exam & Activity) */}
+            {/* Duration */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">
                 Duration (minutes)
@@ -245,40 +323,158 @@ const CreateExam = () => {
                 value={examData.time}
                 min={1}
                 onChange={handleExamChange}
+                className={examData.time <= 0 ? "is-invalid" : ""}
+                disabled={loading}
               />
             </Form.Group>
 
+            {/* Date */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">{examType} Date</Form.Label>
               <Form.Control
                 type="date"
                 value={examDate}
                 onChange={(e) => setExamDate(e.target.value)}
+                className={isInvalid(examDate) ? "is-invalid" : ""}
+                disabled={loading}
               />
             </Form.Group>
 
+            {/* Start Time */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">Start Time</Form.Label>
               <Form.Control
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
+                className={isInvalid(startTime) ? "is-invalid" : ""}
+                disabled={loading}
               />
             </Form.Group>
 
-            <Form.Group className="mb-4">
-              <Form.Label className="fw-semibold">
-                Upload {examType} File or Instructions
-              </Form.Label>
-              <Form.Control
-                type="file"
-                accept=".pdf,.doc,.docx,.txt"
-                onChange={(e) => setExamFile(e.target.files[0])}
-              />
-            </Form.Group>
+            {/* Upload Section */}
+            <Card className="mb-4 border border-2">
+              <Card.Body>
+                <h5 className="fw-bold mb-3">
+                  Upload {examType} File or Instructions
+                </h5>
+                <Form.Group>
+                  <Form.Control
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    onChange={(e) => setExamFile(e.target.files[0])}
+                    disabled={loading}
+                  />
+                  <Form.Text className="text-muted">
+                    (Optional) Upload a pdf/doc with exam instructions.
+                  </Form.Text>
+                </Form.Group>
+              </Card.Body>
+            </Card>
 
+            {/* Questions Section */}
+            <Card className="mb-4 border border-2">
+              <Card.Body>
+                <h5 className="fw-bold mb-3">Create Questions</h5>
+                <Accordion alwaysOpen>
+                  {questions.map((q, qIndex) => (
+                    <Accordion.Item eventKey={qIndex.toString()} key={qIndex}>
+                      <Accordion.Header>
+                        Question {qIndex + 1}:{" "}
+                        {q.questionText || "Untitled Question"}
+                      </Accordion.Header>
+                      <Accordion.Body>
+                        <Form.Control
+                          type="text"
+                          placeholder="Enter question text"
+                          value={q.questionText}
+                          onChange={(e) =>
+                            updateQuestionText(qIndex, e.target.value)
+                          }
+                          className={
+                            isInvalid(q.questionText)
+                              ? "is-invalid mb-3"
+                              : "mb-3"
+                          }
+                          disabled={loading}
+                        />
+                        {q.options.map((opt, oIndex) => (
+                          <div
+                            key={oIndex}
+                            className="d-flex align-items-center mb-2 gap-2"
+                          >
+                            <Form.Control
+                              type="text"
+                              placeholder={`Option ${oIndex + 1}`}
+                              value={opt}
+                              onChange={(e) =>
+                                updateOption(qIndex, oIndex, e.target.value)
+                              }
+                              className={isInvalid(opt) ? "is-invalid" : ""}
+                              disabled={loading}
+                            />
+                            <Form.Check
+                              type="radio"
+                              name={`correct-${qIndex}`}
+                              checked={q.correctAnswer === oIndex}
+                              onChange={() =>
+                                selectCorrectAnswer(qIndex, oIndex)
+                              }
+                              label="Correct"
+                              disabled={loading}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline-danger"
+                              onClick={() => removeOption(qIndex, oIndex)}
+                              disabled={loading || q.options.length <= 2}
+                            >
+                              <i className="bi bi-x-circle"></i>
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          size="sm"
+                          variant="outline-primary"
+                          onClick={() => addOption(qIndex)}
+                          disabled={loading}
+                        >
+                          <i className="bi bi-plus-circle me-1"></i> Add Option
+                        </Button>
+                      </Accordion.Body>
+                    </Accordion.Item>
+                  ))}
+                </Accordion>
+                <Button
+                  variant="primary"
+                  className="mt-3"
+                  onClick={addQuestion}
+                  disabled={loading}
+                >
+                  <i className="bi bi-plus-lg me-1"></i> Add Question
+                </Button>
+                <Form.Group className="mb-4">
+                  <Form.Label className="fw-semibold">
+                    Upload Question File (PDF or DOCX)
+                  </Form.Label>
+                  <Form.Control
+                    type="file"
+                    accept=".pdf,.docx"
+                    onChange={(e) =>
+                      handleUploadQuestionsFile(e.target.files[0])
+                    }
+                    disabled={loading}
+                  />
+                  <Form.Text className="text-muted">
+                    Upload a PDF/DOCX containing questions with options.
+                  </Form.Text>
+                </Form.Group>
+              </Card.Body>
+            </Card>
+
+            {/* Student Assignment */}
             <hr />
-            <h5 className="fw-bold">Bulk Assign Students</h5>
+            <h5 className="fw-bold">Assign Students</h5>
             <Row className="mb-3">
               <Col md>
                 <Form.Select
@@ -327,32 +523,26 @@ const CreateExam = () => {
               </Col>
             </Row>
 
+            {/* Add Individual Student */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">
                 Add Individual Student
               </Form.Label>
-
               <Row className="mb-2">
                 <Col>
-                  <Form.Label className="fw-semibold">
-                    Search Student
-                  </Form.Label>
-                  <Form.Group>
-                    <div className="input-group">
-                      <span className="input-group-text bg-light">
-                        <FaSearch />
-                      </span>
-                      <Form.Control
-                        type="text"
-                        placeholder="Search by name or username"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                      />
-                    </div>
-                  </Form.Group>
+                  <div className="input-group">
+                    <span className="input-group-text bg-light">
+                      <FaSearch />
+                    </span>
+                    <Form.Control
+                      type="text"
+                      placeholder="Search by name or username"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
                 </Col>
               </Row>
-
               <Row>
                 <Col md={9}>
                   <Form.Select
@@ -385,6 +575,7 @@ const CreateExam = () => {
               </Row>
             </Form.Group>
 
+            {/* Enrolled Students */}
             {enrolledStudents.length > 0 && (
               <Card className="mt-3 p-3 border-0 shadow-sm">
                 <h6 className="fw-semibold mb-3">Enrolled Students:</h6>
@@ -408,23 +599,72 @@ const CreateExam = () => {
               </Card>
             )}
 
-            <Button
-              variant="success"
-              className="mt-4 w-100"
-              onClick={handleSaveExam}
-              disabled={loading}
-            >
-              {loading ? (
-                <Spinner size="sm" />
-              ) : (
-                <>
-                  <i className="bi bi-check2-circle me-2"></i>Save {examType}
-                </>
-              )}
-            </Button>
+            {/* Preview & Save */}
+            <div className="d-flex gap-2 mt-4">
+              <Button
+                variant="secondary"
+                className="flex-fill"
+                onClick={() => setShowPreview(true)}
+                disabled={loading}
+              >
+                Preview Exam
+              </Button>
+              <Button
+                variant="success"
+                className="flex-fill"
+                onClick={handleSaveExam}
+                disabled={loading}
+              >
+                {loading ? <Spinner size="sm" /> : "Save " + examType}
+              </Button>
+            </div>
           </Card.Body>
         </Card>
       )}
+
+      {/* Preview Modal */}
+      <Modal show={showPreview} onHide={() => setShowPreview(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Preview {examType}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <h5>{examData.title}</h5>
+          <p>{examData.description}</p>
+          <p>
+            <strong>Duration:</strong> {examData.time} minutes <br />
+            <strong>Date:</strong> {examDate} <br />
+            <strong>Start Time:</strong> {startTime}
+          </p>
+          <hr />
+          {questions.map((q, i) => (
+            <div key={i} className="mb-3">
+              <h6>
+                {i + 1}. {q.questionText}
+              </h6>
+              <ul>
+                {q.options.map((opt, j) => (
+                  <li
+                    key={j}
+                    style={{
+                      fontWeight: q.correctAnswer === j ? "bold" : "normal",
+                      color: q.correctAnswer === j ? "green" : "inherit",
+                    }}
+                  >
+                    {opt}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <hr />
+          <h6>Enrolled Students:</h6>
+          <ul>
+            {enrolledStudents.map((s) => (
+              <li key={s.id}>{s.name}</li>
+            ))}
+          </ul>
+        </Modal.Body>
+      </Modal>
     </Container>
   );
 };

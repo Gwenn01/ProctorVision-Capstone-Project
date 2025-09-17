@@ -372,105 +372,110 @@ const CreateExam = () => {
               </Card.Body>
             </Card>
 
-            {/* Questions Section */}
-            <Card className="mb-4 border border-2">
-              <Card.Body>
-                <h5 className="fw-bold mb-3">Create Questions</h5>
-                <Accordion alwaysOpen>
-                  {questions.map((q, qIndex) => (
-                    <Accordion.Item eventKey={qIndex.toString()} key={qIndex}>
-                      <Accordion.Header>
-                        Question {qIndex + 1}:{" "}
-                        {q.questionText || "Untitled Question"}
-                      </Accordion.Header>
-                      <Accordion.Body>
-                        <Form.Control
-                          type="text"
-                          placeholder="Enter question text"
-                          value={q.questionText}
-                          onChange={(e) =>
-                            updateQuestionText(qIndex, e.target.value)
-                          }
-                          className={
-                            isInvalid(q.questionText)
-                              ? "is-invalid mb-3"
-                              : "mb-3"
-                          }
-                          disabled={loading}
-                        />
-                        {q.options.map((opt, oIndex) => (
-                          <div
-                            key={oIndex}
-                            className="d-flex align-items-center mb-2 gap-2"
-                          >
-                            <Form.Control
-                              type="text"
-                              placeholder={`Option ${oIndex + 1}`}
-                              value={opt}
-                              onChange={(e) =>
-                                updateOption(qIndex, oIndex, e.target.value)
-                              }
-                              className={isInvalid(opt) ? "is-invalid" : ""}
-                              disabled={loading}
-                            />
-                            <Form.Check
-                              type="radio"
-                              name={`correct-${qIndex}`}
-                              checked={q.correctAnswer === oIndex}
-                              onChange={() =>
-                                selectCorrectAnswer(qIndex, oIndex)
-                              }
-                              label="Correct"
-                              disabled={loading}
-                            />
-                            <Button
-                              size="sm"
-                              variant="outline-danger"
-                              onClick={() => removeOption(qIndex, oIndex)}
-                              disabled={loading || q.options.length <= 2}
+            {/* Questions Section (only for Exams) */}
+            {examType === "Exam" && (
+              <Card className="mb-4 border border-2">
+                <Card.Body>
+                  <h5 className="fw-bold mb-3">Create Questions</h5>
+                  <Accordion alwaysOpen>
+                    {questions.map((q, qIndex) => (
+                      <Accordion.Item eventKey={qIndex.toString()} key={qIndex}>
+                        <Accordion.Header>
+                          Question {qIndex + 1}:{" "}
+                          {q.questionText || "Untitled Question"}
+                        </Accordion.Header>
+                        <Accordion.Body>
+                          <Form.Control
+                            type="text"
+                            placeholder="Enter question text"
+                            value={q.questionText}
+                            onChange={(e) =>
+                              updateQuestionText(qIndex, e.target.value)
+                            }
+                            className={
+                              isInvalid(q.questionText)
+                                ? "is-invalid mb-3"
+                                : "mb-3"
+                            }
+                            disabled={loading}
+                          />
+                          {q.options.map((opt, oIndex) => (
+                            <div
+                              key={oIndex}
+                              className="d-flex align-items-center mb-2 gap-2"
                             >
-                              <i className="bi bi-x-circle"></i>
-                            </Button>
-                          </div>
-                        ))}
-                        <Button
-                          size="sm"
-                          variant="outline-primary"
-                          onClick={() => addOption(qIndex)}
-                          disabled={loading}
-                        >
-                          <i className="bi bi-plus-circle me-1"></i> Add Option
-                        </Button>
-                      </Accordion.Body>
-                    </Accordion.Item>
-                  ))}
-                </Accordion>
-                <Button
-                  variant="primary"
-                  className="mt-3"
-                  onClick={addQuestion}
-                  disabled={loading}
-                >
-                  <i className="bi bi-plus-lg me-1"></i> Add Question
-                </Button>
-                <Form.Group className="mb-4">
-                  <Form.Label className="fw-semibold">
-                    Upload Question File (PDF or DOCX)
-                  </Form.Label>
-                  <Form.Control
-                    type="file"
-                    accept=".pdf,.docx"
-                    onChange={(e) =>
-                      handleUploadQuestionsFile(e.target.files[0])
-                    }
+                              <Form.Control
+                                type="text"
+                                placeholder={`Option ${oIndex + 1}`}
+                                value={opt}
+                                onChange={(e) =>
+                                  updateOption(qIndex, oIndex, e.target.value)
+                                }
+                                className={isInvalid(opt) ? "is-invalid" : ""}
+                                disabled={loading}
+                              />
+                              <Form.Check
+                                type="radio"
+                                name={`correct-${qIndex}`}
+                                checked={q.correctAnswer === oIndex}
+                                onChange={() =>
+                                  selectCorrectAnswer(qIndex, oIndex)
+                                }
+                                label="Correct"
+                                disabled={loading}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline-danger"
+                                onClick={() => removeOption(qIndex, oIndex)}
+                                disabled={loading || q.options.length <= 2}
+                              >
+                                <i className="bi bi-x-circle"></i>
+                              </Button>
+                            </div>
+                          ))}
+                          <Button
+                            size="sm"
+                            variant="outline-primary"
+                            onClick={() => addOption(qIndex)}
+                            disabled={loading}
+                          >
+                            <i className="bi bi-plus-circle me-1"></i> Add
+                            Option
+                          </Button>
+                        </Accordion.Body>
+                      </Accordion.Item>
+                    ))}
+                  </Accordion>
+                  <Button
+                    variant="primary"
+                    className="mt-3"
+                    onClick={addQuestion}
                     disabled={loading}
-                  />
-                  <Form.Text className="text-muted">
-                    Upload a PDF/DOCX containing questions with options.
-                  </Form.Text>
-                </Form.Group>
-              </Card.Body>
-            </Card>
+                  >
+                    <i className="bi bi-plus-lg me-1"></i> Add Question
+                  </Button>
+
+                  {/* Upload section */}
+                  <Form.Group className="mb-4">
+                    <Form.Label className="fw-semibold">
+                      Upload Question File (PDF or DOCX)
+                    </Form.Label>
+                    <Form.Control
+                      type="file"
+                      accept=".pdf,.docx"
+                      onChange={(e) =>
+                        handleUploadQuestionsFile(e.target.files[0])
+                      }
+                      disabled={loading}
+                    />
+                    <Form.Text className="text-muted">
+                      Upload a PDF/DOCX containing questions with options.
+                    </Form.Text>
+                  </Form.Group>
+                </Card.Body>
+              </Card>
+            )}
 
             {/* Student Assignment */}
             <hr />

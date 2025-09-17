@@ -26,6 +26,10 @@ const ManageExam = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // NEW states for question editor
+  const [editingQuestion, setEditingQuestion] = useState(null);
+  const [showQuestionModal, setShowQuestionModal] = useState(false);
+
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const instructorId = userData.id;
 
@@ -45,31 +49,36 @@ const ManageExam = () => {
     if (instructorId) fetchExams();
   }, [instructorId]);
 
-  const fetchStudents = async (examId) => {
+  // ✅ Fetch students AND questions for the selected exam
+  const fetchExamData = async (examId) => {
     try {
       setLoading(true);
-      const [enrolledRes, allRes] = await Promise.all([
+      const [enrolledRes, allRes, questionsRes] = await Promise.all([
         axios.get(`http://localhost:5000/api/exam_students/${examId}`),
         axios.get("http://localhost:5000/api/students"),
+        axios.get(`http://localhost:5000/api/exam_questions/${examId}`),
       ]);
       setEnrolledStudents(enrolledRes.data);
       setAllStudents(allRes.data);
+      setSelectedExam((prev) => ({
+        ...prev,
+        questions: questionsRes.data,
+      }));
     } catch (err) {
-      console.error("Failed to fetch students", err);
+      console.error("Failed to fetch exam data", err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleViewExam = (exam) => {
-    setSelectedExam({ ...exam });
-    fetchStudents(exam.id);
+    setSelectedExam({ ...exam, questions: [] });
+    fetchExamData(exam.id);
     setShowModal(true);
   };
 
   const handleDeleteExam = async (exam) => {
     const examId = exam.id;
-
     if (
       window.confirm(`Are you sure you want to delete this ${exam.exam_type}?`)
     ) {
@@ -104,7 +113,7 @@ const ManageExam = () => {
         student_id: selectedStudent,
       });
       toast.success("Student added successfully");
-      fetchStudents(selectedExam.id);
+      fetchExamData(selectedExam.id);
       setSelectedStudent("");
     } catch (err) {
       toast.error("Failed to add student");
@@ -117,7 +126,7 @@ const ManageExam = () => {
         `http://localhost:5000/api/exam_students/${selectedExam.id}/${studentId}`
       );
       toast.success("Student removed successfully");
-      fetchStudents(selectedExam.id);
+      fetchExamData(selectedExam.id);
     } catch (err) {
       toast.error("Failed to remove student");
     }
@@ -140,6 +149,36 @@ const ManageExam = () => {
     } catch (err) {
       toast.error(`Failed to update ${selectedExam.exam_type}.`);
     }
+  };
+
+  // -----------------------------
+  // Question Handlers
+  // -----------------------------
+  const handleEditQuestion = (question) => {
+    setEditingQuestion({ ...question });
+    setShowQuestionModal(true);
+  };
+
+  const handleDeleteQuestion = async (questionId) => {
+    if (!window.confirm("Delete this question?")) return;
+    try {
+      await axios.delete(
+        `http://localhost:5000/api/exam_questions/${questionId}`
+      );
+      toast.success("Question deleted");
+      fetchExamData(selectedExam.id);
+    } catch (err) {
+      toast.error("Failed to delete question");
+    }
+  };
+
+  const handleAddQuestion = () => {
+    setEditingQuestion({
+      question_text: "",
+      options: ["", ""],
+      correct_answer: null,
+    });
+    setShowQuestionModal(true);
   };
 
   const renderTable = (items, type) => (
@@ -224,7 +263,7 @@ const ManageExam = () => {
         Manage Exams & Activities
       </h2>
 
-      {/* Tabs with better styling */}
+      {/* Tabs */}
       <Card className="shadow-lg border-0">
         <Card.Body>
           <Tabs
@@ -256,7 +295,7 @@ const ManageExam = () => {
         </Card.Body>
       </Card>
 
-      {/* Modal */}
+      {/* Exam Modal */}
       {selectedExam && (
         <Modal
           show={showModal}
@@ -277,6 +316,7 @@ const ManageExam = () => {
             </Modal.Title>
           </Modal.Header>
           <Modal.Body style={{ maxHeight: "500px", overflowY: "auto" }}>
+            {/* Exam Info */}
             <Form.Group className="mb-3">
               <Form.Label>Title</Form.Label>
               <Form.Control
@@ -351,6 +391,7 @@ const ManageExam = () => {
               />
             </Form.Group>
 
+            {/* File */}
             {selectedExam.exam_file && (
               <div className="mb-3">
                 <strong>File:</strong>{" "}
@@ -372,6 +413,7 @@ const ManageExam = () => {
               <i className="bi bi-save me-1"></i> Save Changes
             </Button>
 
+            {/* Students */}
             <h5 className="mt-4">Enrolled Students</h5>
             {loading ? (
               <div className="text-center my-3">
@@ -405,6 +447,7 @@ const ManageExam = () => {
               </div>
             )}
 
+            {/* Add Student */}
             <Form.Group controlId="searchStudent" className="mb-2">
               <Form.Control
                 type="text"
@@ -414,7 +457,7 @@ const ManageExam = () => {
               />
             </Form.Group>
 
-            <Form.Group controlId="addStudent" className="mt-1">
+            <Form.Group controlId="addStudent" className="mt-1 mb-4">
               <Form.Label>Add Student</Form.Label>
               <Form.Select
                 value={selectedStudent}
@@ -442,9 +485,177 @@ const ManageExam = () => {
                 <i className="bi bi-person-plus-fill me-1"></i>Add Student
               </Button>
             </Form.Group>
+
+            {/* Questions */}
+            <h5 className="mt-4">Questions</h5>
+            {loading ? (
+              <div className="text-center my-3">
+                <Spinner animation="border" variant="primary" />
+              </div>
+            ) : (
+              <div
+                className="mb-4"
+                style={{ maxHeight: "300px", overflowY: "auto" }}
+              >
+                <ul className="list-group">
+                  {selectedExam.questions &&
+                    selectedExam.questions.map((q, qIndex) => (
+                      <li key={q.id || qIndex} className="list-group-item">
+                        <div className="fw-bold">
+                          {qIndex + 1}. {q.question_text}
+                        </div>
+                        <ul className="mb-2">
+                          {q.options.map((opt, i) => (
+                            <li
+                              key={i}
+                              style={{
+                                fontWeight:
+                                  q.correct_answer === i ? "bold" : "normal",
+                                color:
+                                  q.correct_answer === i ? "green" : "inherit",
+                              }}
+                            >
+                              {opt}
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="d-flex gap-2">
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            onClick={() => handleEditQuestion(q)}
+                          >
+                            <i className="bi bi-pencil"></i> Edit
+                          </Button>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            onClick={() => handleDeleteQuestion(q.id)}
+                          >
+                            <i className="bi bi-trash"></i> Delete
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
+            <Button
+              variant="success"
+              className="w-100"
+              onClick={handleAddQuestion}
+            >
+              <i className="bi bi-plus-circle me-1"></i> Add Question
+            </Button>
           </Modal.Body>
         </Modal>
       )}
+
+      {/* Question Modal */}
+      <Modal
+        show={showQuestionModal}
+        onHide={() => setShowQuestionModal(false)}
+        centered
+        size="lg"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {editingQuestion?.id ? "Edit Question" : "Add Question"}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group className="mb-3">
+            <Form.Label>Question Text</Form.Label>
+            <Form.Control
+              type="text"
+              value={editingQuestion?.question_text || ""}
+              onChange={(e) =>
+                setEditingQuestion({
+                  ...editingQuestion,
+                  question_text: e.target.value,
+                })
+              }
+            />
+          </Form.Group>
+
+          {editingQuestion?.options?.map((opt, i) => (
+            <div key={i} className="d-flex align-items-center mb-2 gap-2">
+              <Form.Control
+                type="text"
+                value={opt}
+                placeholder={`Option ${i + 1}`}
+                onChange={(e) => {
+                  const newOptions = [...editingQuestion.options];
+                  newOptions[i] = e.target.value;
+                  setEditingQuestion({
+                    ...editingQuestion,
+                    options: newOptions,
+                  });
+                }}
+              />
+              <Form.Check
+                type="radio"
+                name="correct"
+                checked={editingQuestion.correct_answer === i}
+                onChange={() =>
+                  setEditingQuestion({
+                    ...editingQuestion,
+                    correct_answer: i,
+                  })
+                }
+                label="Correct"
+              />
+            </div>
+          ))}
+
+          <Button
+            size="sm"
+            variant="outline-primary"
+            onClick={() =>
+              setEditingQuestion({
+                ...editingQuestion,
+                options: [...editingQuestion.options, ""],
+              })
+            }
+          >
+            <i className="bi bi-plus-circle me-1"></i> Add Option
+          </Button>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="secondary"
+            onClick={() => setShowQuestionModal(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={async () => {
+              try {
+                if (editingQuestion.id) {
+                  await axios.put(
+                    `http://localhost:5000/api/exam_questions/${editingQuestion.id}`,
+                    editingQuestion
+                  );
+                  toast.success("Question updated");
+                } else {
+                  await axios.post(`http://localhost:5000/api/exam_questions`, {
+                    ...editingQuestion,
+                    exam_id: selectedExam.id,
+                  });
+                  toast.success("Question added");
+                }
+                setShowQuestionModal(false);
+                fetchExamData(selectedExam.id);
+              } catch (err) {
+                toast.error("Failed to save question");
+              }
+            }}
+          >
+            Save
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Container>
   );
 };

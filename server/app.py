@@ -55,6 +55,7 @@ from routes.classification_routes import classification_bp
 from routes.get_behavior_images import get_behavior_images_bp
 from routes.instructor_student_behavior import instructor_behavior_bp
 from routes.utils.email_verification import email_verification_bp
+from routes.exam_question_routes import exam_questions_bp
 
 # NEW: WebRTC blueprint (streams student camera to server)
 from routes.webrtc_routes import webrtc_bp
@@ -80,6 +81,7 @@ app.register_blueprint(classification_bp, url_prefix='/api')
 app.register_blueprint(get_behavior_images_bp, url_prefix="/api")
 app.register_blueprint(instructor_behavior_bp, url_prefix="/api")
 app.register_blueprint(email_verification_bp, url_prefix="/api")
+app.register_blueprint(exam_questions_bp, url_prefix="/api")
 
 # Register WebRTC endpoints last (organization preference)
 app.register_blueprint(webrtc_bp, url_prefix="/api")

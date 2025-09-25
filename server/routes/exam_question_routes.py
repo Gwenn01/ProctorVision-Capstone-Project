@@ -3,7 +3,9 @@ from database.connection import get_db_connection
 
 exam_questions_bp = Blueprint("exam_questions", __name__)
 
-#  Get all questions (with options) for an exam
+# -----------------------------
+# Get all questions (with options) for an exam
+# -----------------------------
 @exam_questions_bp.route("/exam_questions/<int:exam_id>", methods=["GET"])
 def get_exam_questions(exam_id):
     try:
@@ -21,10 +23,16 @@ def get_exam_questions(exam_id):
                 (q["id"],),
             )
             options = cursor.fetchall()
-            q["options"] = [opt["option_text"] for opt in options]
-            # store index of correct answer
-            correct_index = next((i for i, opt in enumerate(options) if opt["is_correct"] == 1), None)
-            q["correct_answer"] = correct_index
+
+            # ✅ Ensure option_text is always a string
+            for opt in options:
+                opt["option_text"] = str(opt["option_text"])
+
+            q["options"] = options
+            # ✅ Add correct_answer index (for frontend)
+            q["correct_answer"] = next(
+                (i for i, opt in enumerate(options) if opt["is_correct"]), None
+            )
 
         conn.close()
         return jsonify(questions), 200
@@ -32,7 +40,9 @@ def get_exam_questions(exam_id):
         return jsonify({"error": str(e)}), 500
 
 
-#  Add a question with options
+# -----------------------------
+# Add a question with options
+# -----------------------------
 @exam_questions_bp.route("/exam_questions", methods=["POST"])
 def add_exam_question():
     try:
@@ -40,7 +50,7 @@ def add_exam_question():
         exam_id = data.get("exam_id")
         question_text = data.get("question_text")
         options = data.get("options", [])
-        correct_answer = data.get("correct_answer")
+        correct_answer = data.get("correct_answer")  # index of correct option
 
         if not exam_id or not question_text or not options:
             return jsonify({"error": "Missing required fields"}), 400
@@ -70,7 +80,9 @@ def add_exam_question():
         return jsonify({"error": str(e)}), 500
 
 
-#  Update a question (and options)
+# -----------------------------
+# Update a question (and options)
+# -----------------------------
 @exam_questions_bp.route("/exam_questions/<int:question_id>", methods=["PUT"])
 def update_exam_question(question_id):
     try:
@@ -106,7 +118,9 @@ def update_exam_question(question_id):
         return jsonify({"error": str(e)}), 500
 
 
-#  Delete a question (and its options)
+# -----------------------------
+# Delete a question (and its options)
+# -----------------------------
 @exam_questions_bp.route("/exam_questions/<int:question_id>", methods=["DELETE"])
 def delete_exam_question(question_id):
     try:
@@ -119,5 +133,41 @@ def delete_exam_question(question_id):
         conn.commit()
         conn.close()
         return jsonify({"message": "Question deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# -----------------------------
+# Get exam with questions + options
+# -----------------------------
+@exam_questions_bp.route("/exam_with_questions/<int:exam_id>", methods=["GET"])
+def get_exam_with_questions(exam_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Fetch questions
+        cursor.execute("SELECT * FROM exam_questions WHERE exam_id = %s", (exam_id,))
+        questions = cursor.fetchall()
+
+        for q in questions:
+            cursor.execute(
+                "SELECT id, option_text, is_correct FROM exam_options WHERE question_id = %s",
+                (q["id"],),
+            )
+            options = cursor.fetchall()
+
+            for opt in options:
+                opt["option_text"] = str(opt["option_text"])
+                opt["is_correct"] = bool(opt["is_correct"])
+
+            q["options"] = options
+          
+            q["correct_answer"] = next(
+                (i for i, opt in enumerate(options) if opt["is_correct"]), None
+            )
+
+        conn.close()
+        return jsonify(questions), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

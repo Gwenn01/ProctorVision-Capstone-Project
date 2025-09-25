@@ -507,15 +507,13 @@ const ManageExam = () => {
                         <ul className="mb-2">
                           {q.options.map((opt, i) => (
                             <li
-                              key={i}
+                              key={opt.id || i}
                               style={{
-                                fontWeight:
-                                  q.correct_answer === i ? "bold" : "normal",
-                                color:
-                                  q.correct_answer === i ? "green" : "inherit",
+                                fontWeight: opt.is_correct ? "bold" : "normal",
+                                color: opt.is_correct ? "green" : "inherit",
                               }}
                             >
-                              {opt}
+                              {opt.option_text}
                             </li>
                           ))}
                         </ul>
@@ -582,7 +580,7 @@ const ManageExam = () => {
             <div key={i} className="d-flex align-items-center mb-2 gap-2">
               <Form.Control
                 type="text"
-                value={opt}
+                value={opt.option_text}
                 placeholder={`Option ${i + 1}`}
                 onChange={(e) => {
                   const newOptions = [...editingQuestion.options];

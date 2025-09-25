@@ -11,7 +11,7 @@ import {
   Alert,
 } from "react-bootstrap";
 import { toast } from "react-toastify";
-import Spinner from "../../components/Spinner";
+//import Spinner from "../../components/Spinner";
 import axios from "axios";
 
 import {
@@ -47,6 +47,13 @@ const TakeExam = () => {
   const noFaceActiveRef = useRef(false);
 
   const [lastCaptureAt, setLastCaptureAt] = useState(0);
+
+  // handle question and answer
+  const [questions, setQuestions] = useState([]);
+  const [studentAnswers, setStudentAnswers] = useState({});
+
+  const [examResult, setExamResult] = useState(null); // store exam score & answers
+  const [showResultModal, setShowResultModal] = useState(false); // control modal
 
   // ---- helpers: one-shot beep (audio element first, then Web Audio fallback) ----
   const playBeep = useCallback(async () => {
@@ -413,6 +420,24 @@ const TakeExam = () => {
     setClassifiedLogs(logs.reverse());
   }, [selectedExam]);
 
+  // Fetch questions when exam is selected
+  useEffect(() => {
+    if (!selectedExam) return;
+    axios
+      .get(`${API_BASE}/api/exam_with_questions/${selectedExam.id}`)
+      .then((res) => {
+        setQuestions(res.data);
+        // reset answers
+        setStudentAnswers({});
+      })
+      .catch((err) => console.error("Failed to load questions:", err));
+  }, [selectedExam]);
+
+  // Handle answer selection
+  const handleAnswerSelect = (qId, optionId) => {
+    setStudentAnswers((prev) => ({ ...prev, [qId]: optionId }));
+  };
+
   // Submit exam
   const handleSubmitExam = useCallback(async () => {
     if (isSubmitting) return;
@@ -447,10 +472,22 @@ const TakeExam = () => {
         exam_id: selectedExam.id,
       });
 
-      await axios.post(`${API_BASE}/api/submit_exam`, {
+      console.log("Submitting exam with payload:", {
+        user_id: studentId,
+        exam_id: selectedExam?.id,
+        answers: studentAnswers,
+      });
+
+      // Capture backend response for result
+      const { data } = await axios.post(`${API_BASE}/api/submit_exam`, {
         user_id: studentId,
         exam_id: selectedExam.id,
+        answers: studentAnswers,
       });
+
+      // Store result from backend (score + total_score)
+      setExamResult(data);
+      setShowResultModal(true);
 
       await fetchBehaviorLogs();
 
@@ -463,14 +500,14 @@ const TakeExam = () => {
 
     setIsSubmitting(false);
     setIsTakingExam(false);
-  }, [isSubmitting, selectedExam, fetchBehaviorLogs, stopNoFaceAlarm]);
+  }, [isSubmitting, selectedExam, fetchBehaviorLogs, stopNoFaceAlarm, studentAnswers]);
 
   // Auto-submit when time is up
   useEffect(() => {
     if (isTakingExam && timer === 0 && selectedExam?.id) {
       handleSubmitExam();
     }
-  }, [timer, isTakingExam, selectedExam, handleSubmitExam]);
+  }, [timer, isTakingExam, selectedExam, handleSubmitExam, studentAnswers]);
 
   // Cleanup on unmount / route change
   useEffect(() => {
@@ -578,6 +615,7 @@ const TakeExam = () => {
       {/* Taking Exam UI */}
       {isTakingExam && selectedExam && (
         <Row className="mt-4">
+          {/* Questions Area */}
           <Col lg={8}>
             <Card className="shadow border-0 rounded-3">
               <Card.Header className="bg-primary text-white d-flex justify-content-between align-items-center">
@@ -590,6 +628,7 @@ const TakeExam = () => {
                 </span>
               </Card.Header>
               <Card.Body>
+                {/* Timer */}
                 <div className="d-flex justify-content-between align-items-center mb-3">
                   <span className="fw-semibold">
                     Time Remaining: {formatTime(timer)}
@@ -601,9 +640,60 @@ const TakeExam = () => {
                   />
                   <span>{selectedExam.duration_minutes} min</span>
                 </div>
-                <div className="border rounded p-3 bg-light-subtle">
-                  <pre className="mb-0">{examText}</pre>
-                </div>
+
+                {/* Exam Instructions (from file) */}
+                {examText && (
+                  <div className="border rounded p-3 bg-light-subtle mb-3">
+                    <pre className="mb-0">{examText}</pre>
+                  </div>
+                )}
+
+                {/* Questions */}
+                {questions.length > 0 && (
+                  <div>
+                    {questions.map((q, idx) => (
+                      <Card key={q.id} className="mb-4 shadow-sm border-0">
+                        <Card.Body>
+                          {/* Question Title */}
+                          <h6 className="fw-bold mb-3">
+                            {idx + 1}. {q.question_text}
+                          </h6>
+
+                          {/* Options */}
+                          <Form>
+                            {q.options.map((opt) => (
+                              <Form.Check
+                                key={opt.id}
+                                type="radio"
+                                id={`q-${q.id}-opt-${opt.id}`}
+                                name={`q-${q.id}`}
+                                label={opt.option_text}
+                                checked={studentAnswers[q.id] === opt.id}
+                                onChange={() =>
+                                  handleAnswerSelect(q.id, opt.id)
+                                }
+                                className="mb-2 p-2 border rounded hover-bg"
+                                style={{
+                                  backgroundColor:
+                                    studentAnswers[q.id] === opt.id
+                                      ? "#e6f0ff"
+                                      : "#fff",
+                                  borderColor:
+                                    studentAnswers[q.id] === opt.id
+                                      ? "#0d6efd"
+                                      : "#dee2e6",
+                                  cursor: "pointer",
+                                }}
+                              />
+                            ))}
+                          </Form>
+                        </Card.Body>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {/* Submit */}
                 <div className="text-end mt-3">
                   <Button
                     variant="danger"
@@ -611,36 +701,38 @@ const TakeExam = () => {
                     disabled={isSubmitting}
                   >
                     <i className="bi bi-box-arrow-up me-2"></i>
-                    {isSubmitting ? "Submitting..." : "Submit"}
+                    {isSubmitting ? "Submitting..." : "Submit Exam"}
                   </Button>
                 </div>
               </Card.Body>
             </Card>
           </Col>
+
+          {/* Camera Area */}
           <Col lg={4} className="mt-3 mt-lg-0">
-            <Card className="shadow border-0 rounded-3">
-              <Card.Header className="bg-dark text-white">
-                <i className="bi bi-camera-video me-2"></i>Live Camera
-              </Card.Header>
-              <Card.Body className="p-0 position-relative">
-                <video
-                  ref={videoPreviewRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  style={{ width: "100%", borderRadius: "0 0 0.5rem 0.5rem" }}
-                />
-                <div
-                  ref={overlayRef}
-                  className="position-absolute top-0 start-0 m-2 px-2 py-1 rounded text-white small"
-                  style={{
-                    background: "rgba(0,0,0,0.6)",
-                  }}
-                >
-                  Looking Forward
-                </div>
-              </Card.Body>
-            </Card>
+            <div style={{ position: "sticky", top: "20px", zIndex: 1000 }}>
+              <Card className="shadow border-0 rounded-3">
+                <Card.Header className="bg-dark text-white">
+                  <i className="bi bi-camera-video me-2"></i>Live Camera
+                </Card.Header>
+                <Card.Body className="p-0 position-relative">
+                  <video
+                    ref={videoPreviewRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    style={{ width: "100%", borderRadius: "0 0 0.5rem 0.5rem" }}
+                  />
+                  <div
+                    ref={overlayRef}
+                    className="position-absolute top-0 start-0 m-2 px-2 py-1 rounded text-white small"
+                    style={{ background: "rgba(0,0,0,0.6)" }}
+                  >
+                    Looking Forward
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
           </Col>
         </Row>
       )}
@@ -706,6 +798,72 @@ const TakeExam = () => {
             variant="secondary"
             onClick={() => setShowCapturedModal(false)}
           >
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Exam Result Modal */}
+      <Modal
+        show={showResultModal}
+        onHide={() => setShowResultModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <i className="bi bi-check-circle me-2"></i>Exam Result
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {examResult ? (
+            <>
+              <h5 className="mb-3 text-center">
+                Score:{" "}
+                <span className="text-success">
+                  {examResult.score} / {examResult.total_score}
+                </span>
+              </h5>
+
+              {/* ✅ Show answers review */}
+              {examResult.answers && examResult.answers.length > 0 && (
+                <div className="mt-4">
+                  {examResult.answers.map((ans, idx) => (
+                    <Card key={idx} className="mb-3 shadow-sm">
+                      <Card.Body>
+                        <h6>
+                          {idx + 1}. {ans.question_text}
+                        </h6>
+                        <p>
+                          <strong>Your Answer:</strong>{" "}
+                          <span
+                            className={
+                              ans.is_correct ? "text-success" : "text-danger"
+                            }
+                          >
+                            {ans.selected_answer}
+                          </span>
+                        </p>
+                        {!ans.is_correct && (
+                          <p>
+                            <strong>Correct Answer:</strong>{" "}
+                            <span className="text-success">
+                              {ans.correct_answer}
+                            </span>
+                          </p>
+                        )}
+                      </Card.Body>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p>No result available.</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowResultModal(false)}>
             Close
           </Button>
         </Modal.Footer>

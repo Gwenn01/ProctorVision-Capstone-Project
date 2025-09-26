@@ -4,3 +4,5 @@ Flask-JWT-Extended
 mysql-connector-python
 pypdf
 python-docx
+bcrypt
+requests

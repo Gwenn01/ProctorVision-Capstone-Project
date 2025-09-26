@@ -1,0 +1,6 @@
+Flask
+Flask-Cors
+Flask-JWT-Extended
+mysql-connector-python
+pypdf
+python-docx

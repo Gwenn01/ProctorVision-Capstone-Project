@@ -21,6 +21,7 @@ const CreateExam = () => {
   const instructorId = userData.id;
 
   const [examType, setExamType] = useState("");
+  const [examCategory, setExamCategory] = useState("CODING");
   const [examData, setExamData] = useState({
     title: "",
     description: "",
@@ -38,6 +39,9 @@ const CreateExam = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // exam instruction
+  const [examInstructions, setExamInstructions] = useState("");
 
   // Questions + preview modal
   const [questions, setQuestions] = useState([]);
@@ -111,6 +115,51 @@ const CreateExam = () => {
     setEnrolledStudents(enrolledStudents.filter((s) => s.id !== id));
   };
 
+  // state you already have:
+
+  const handleUploadInstructionFile = async (file) => {
+    if (!file) return;
+
+    // Optional: guard supported types
+    const ok = /\.(pdf|docx?|txt)$/i.test(file.name);
+    if (!ok) {
+      toast.error("Unsupported file type. Use PDF, DOCX, DOC, or TXT.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await axios.post(
+        "http://localhost:5000/api/parse-instructions",
+        fd,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      const text = (res?.data?.instructions || "").trim();
+
+      if (!text) {
+        toast.warn("No extractable text found in the file.");
+      } else {
+        // Put extracted text into the textarea so instructor can edit it
+        setExamInstructions(text);
+        // Optionally auto-pick the format as CODING (instructions flow)
+        if (!examCategory) setExamCategory("CODING");
+        toast.success("Instructions extracted. You can edit them now.");
+      }
+
+      // keep the file reference if you still want to submit it with the form
+      setExamFile(file);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to extract text from the file.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Question Handlers
   const addQuestion = () => {
     setQuestions([
@@ -136,13 +185,34 @@ const CreateExam = () => {
     updated[qIndex].options.push("");
     setQuestions(updated);
   };
-
   const removeOption = (qIndex, oIndex) => {
-    const updated = [...questions];
-    updated[qIndex].options = updated[qIndex].options.filter(
-      (_, i) => i !== oIndex
-    );
-    setQuestions(updated);
+    setQuestions((prev) => {
+      const next = [...prev];
+      const q = next[qIndex];
+      if (!q) return prev;
+
+      // enforce at least 2 options
+      if ((q.options?.length ?? 0) <= 2) {
+        // optional toast, safe if not present
+        try {
+          toast?.warning?.("A question must have at least 2 options.");
+        } catch {}
+        return prev;
+      }
+
+      // clone question & options
+      const newOptions = q.options.filter((_, i) => i !== oIndex);
+
+      // fix correctAnswer index
+      let newCorrect = q.correctAnswer;
+      if (newCorrect === oIndex)
+        newCorrect = null; // deleted the correct option
+      else if (typeof newCorrect === "number" && newCorrect > oIndex)
+        newCorrect -= 1; // shift left
+
+      next[qIndex] = { ...q, options: newOptions, correctAnswer: newCorrect };
+      return next;
+    });
   };
 
   const selectCorrectAnswer = (qIndex, oIndex) => {
@@ -151,6 +221,17 @@ const CreateExam = () => {
     setQuestions(updated);
   };
 
+  const removeQuestion = (qIndex) => {
+    setQuestions((prev) => prev.filter((_, i) => i !== qIndex));
+  };
+
+  const clearCorrectAnswer = (qIndex) => {
+    setQuestions((prev) =>
+      prev.map((q, i) => (i === qIndex ? { ...q, correctAnswer: null } : q))
+    );
+  };
+
+  // save correct answers
   const handleSaveExam = async () => {
     const { title, description, time } = examData;
 
@@ -159,16 +240,20 @@ const CreateExam = () => {
       return;
     }
 
+    // replace both checks with this single condition
+    if (!examInstructions?.trim() && questions.length === 0) {
+      toast.error(
+        "Add instructions (for CODING) or at least one question (for MCQ)."
+      );
+      return;
+    }
+
     if (enrolledStudents.length === 0) {
       toast.warning("Please assign at least one student.");
       return;
     }
 
-    if (questions.length === 0) {
-      toast.warning("Please add at least one question.");
-      return;
-    }
-
+    console.log(examInstructions.trim());
     const formData = new FormData();
     formData.append("title", title);
     formData.append("description", description);
@@ -177,8 +262,10 @@ const CreateExam = () => {
     formData.append("start_time", startTime);
     formData.append("instructor_id", instructorId);
     formData.append("exam_type", examType);
+    formData.append("exam_category", examCategory);
     formData.append("students", JSON.stringify(enrolledStudents));
     formData.append("questions", JSON.stringify(questions));
+    formData.append("instructions", examInstructions.trim());
 
     if (examFile) {
       formData.append("exam_file", examFile);
@@ -225,6 +312,8 @@ const CreateExam = () => {
       );
       // Merge parsed questions into state
       setQuestions([...questions, ...res.data.questions]);
+      // Attach the file to the exam so it gets persisted to DB on save
+      setExamFile(file);
       toast.success("Questions imported! You can now edit them.");
     } catch (err) {
       toast.error("Failed to parse questions.");
@@ -282,7 +371,6 @@ const CreateExam = () => {
                 </>
               )}
             </h2>
-
             {/* Title */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">Title</Form.Label>
@@ -296,7 +384,6 @@ const CreateExam = () => {
                 disabled={loading}
               />
             </Form.Group>
-
             {/* Description */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">Description</Form.Label>
@@ -311,7 +398,6 @@ const CreateExam = () => {
                 disabled={loading}
               />
             </Form.Group>
-
             {/* Duration */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">
@@ -327,7 +413,6 @@ const CreateExam = () => {
                 disabled={loading}
               />
             </Form.Group>
-
             {/* Date */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">{examType} Date</Form.Label>
@@ -339,7 +424,6 @@ const CreateExam = () => {
                 disabled={loading}
               />
             </Form.Group>
-
             {/* Start Time */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">Start Time</Form.Label>
@@ -352,29 +436,103 @@ const CreateExam = () => {
               />
             </Form.Group>
 
-            {/* Upload Section */}
-            <Card className="mb-4 border border-2">
+            {/* Category Picker */}
+            {/* Exam Format Picker */}
+            <Card className="mb-4 border-0 shadow-sm rounded-3">
               <Card.Body>
-                <h5 className="fw-bold mb-3">
-                  Upload {examType} File or Instructions
-                </h5>
-                <Form.Group>
-                  <Form.Control
-                    type="file"
-                    accept=".pdf,.doc,.docx,.txt"
-                    onChange={(e) => setExamFile(e.target.files[0])}
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <i className="bi bi-sliders2-vertical fs-5 text-primary"></i>
+                    <h5 className="fw-semibold mb-0">Exam Format</h5>
+                  </div>
+                  {examCategory && (
+                    <span className="badge bg-light text-dark border">
+                      Selected:{" "}
+                      {examCategory === "CODING"
+                        ? "Coding / Instructions"
+                        : "QA"}
+                    </span>
+                  )}
+                </div>
+
+                <Form.Group controlId="examCategory">
+                  <Form.Label className="fw-semibold">Format</Form.Label>
+                  {/* Keep values aligned with backend expectations: "MCQ" | "CODING" */}
+                  <Form.Select
+                    value={examCategory}
+                    onChange={(e) => setExamCategory(e.target.value)}
                     disabled={loading}
-                  />
-                  <Form.Text className="text-muted">
-                    (Optional) Upload a pdf/doc with exam instructions.
-                  </Form.Text>
+                    className="w-100"
+                  >
+                    <option value="">— Select format —</option>
+                    <option value="CODING">Coding (Instructions Only)</option>
+                    <option value="QA">QA (Questions & Answers)</option>
+                  </Form.Select>
+                  <div className="form-text mt-2">
+                    {examCategory === "QA" && (
+                      <>You’ll create multiple-choice questions below.</>
+                    )}
+                    {examCategory === "CODING" && (
+                      <>
+                        Provide clear instructions; no QA section will be shown.
+                      </>
+                    )}
+                    {!examCategory && <>Pick a format to continue.</>}
+                  </div>
                 </Form.Group>
               </Card.Body>
             </Card>
 
-            {/* Questions Section (only for Exams) */}
-            {examType === "Exam" && (
-              <Card className="mb-4 border border-2">
+            {/* Instructions Section — show ONLY for CODING */}
+            {examCategory === "CODING" && (
+              <Card className="mb-4 border border-5">
+                <Card.Body>
+                  <h5 className="fw-bold mb-3">
+                    {examType || "Exam"} Instructions
+                  </h5>
+
+                  {/* Required Instructions */}
+                  <Form.Group className="mb-3" controlId="examInstructions">
+                    <Form.Label className="fw-semibold">
+                      Instructions <span className="text-danger">*</span>
+                    </Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={4}
+                      placeholder={`Enter clear ${
+                        examType || "exam"
+                      } instructions for students`}
+                      value={examInstructions}
+                      onChange={(e) => setExamInstructions(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </Form.Group>
+
+                  {/* Optional File */}
+                  <Form.Group controlId="examFile">
+                    <Form.Label className="fw-semibold">
+                      Upload Instruction File (PDF/DOC/DOCX/TXT)
+                    </Form.Label>
+                    <Form.Control
+                      type="file"
+                      accept=".pdf,.doc,.docx,.txt"
+                      onChange={(e) =>
+                        handleUploadInstructionFile(e.target.files[0])
+                      }
+                      disabled={loading}
+                    />
+                    <Form.Text className="text-muted">
+                      (Optional) Attach a file; its text will be placed in the
+                      editor below.
+                    </Form.Text>
+                  </Form.Group>
+                </Card.Body>
+              </Card>
+            )}
+            {/* Questions Section — show ONLY for MCQ and when examType is 'Exam' */}
+            {examType === "Exam" && examCategory === "QA" && (
+              <Card className="mb-4 border border-5">
                 <Card.Body>
                   <h5 className="fw-bold mb-3">Create Questions</h5>
                   <Accordion alwaysOpen>
@@ -399,6 +557,7 @@ const CreateExam = () => {
                             }
                             disabled={loading}
                           />
+
                           {q.options.map((opt, oIndex) => (
                             <div
                               key={oIndex}
@@ -434,19 +593,46 @@ const CreateExam = () => {
                               </Button>
                             </div>
                           ))}
-                          <Button
-                            size="sm"
-                            variant="outline-primary"
-                            onClick={() => addOption(qIndex)}
-                            disabled={loading}
-                          >
-                            <i className="bi bi-plus-circle me-1"></i> Add
-                            Option
-                          </Button>
+
+                          {/* Actions row */}
+                          <div className="d-flex justify-content-between align-items-center mt-3">
+                            <div className="d-flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline-primary"
+                                onClick={() => addOption(qIndex)}
+                                disabled={loading}
+                              >
+                                <i className="bi bi-plus-circle me-1"></i> Add
+                                Option
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline-secondary"
+                                onClick={() => clearCorrectAnswer(qIndex)}
+                                disabled={loading || q.correctAnswer === null}
+                              >
+                                <i className="bi bi-eraser me-1"></i> Clear
+                                Correct
+                              </Button>
+                            </div>
+
+                            <Button
+                              size="sm"
+                              variant="outline-danger"
+                              onClick={() => removeQuestion(qIndex)}
+                              disabled={loading}
+                            >
+                              <i className="bi bi-trash me-1"></i> Delete
+                              Question
+                            </Button>
+                          </div>
                         </Accordion.Body>
                       </Accordion.Item>
                     ))}
                   </Accordion>
+
                   <Button
                     variant="primary"
                     className="mt-3"
@@ -456,8 +642,8 @@ const CreateExam = () => {
                     <i className="bi bi-plus-lg me-1"></i> Add Question
                   </Button>
 
-                  {/* Upload section */}
-                  <Form.Group className="mb-4">
+                  {/* Upload MCQ questions file */}
+                  <Form.Group className="mb-4 mt-3">
                     <Form.Label className="fw-semibold">
                       Upload Question File (PDF or DOCX)
                     </Form.Label>
@@ -476,7 +662,6 @@ const CreateExam = () => {
                 </Card.Body>
               </Card>
             )}
-
             {/* Student Assignment */}
             <hr />
             <h5 className="fw-bold">Assign Students</h5>
@@ -527,7 +712,6 @@ const CreateExam = () => {
                 </Button>
               </Col>
             </Row>
-
             {/* Add Individual Student */}
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">
@@ -579,7 +763,6 @@ const CreateExam = () => {
                 </Col>
               </Row>
             </Form.Group>
-
             {/* Enrolled Students */}
             {enrolledStudents.length > 0 && (
               <Card className="mt-3 p-3 border-0 shadow-sm">
@@ -603,7 +786,6 @@ const CreateExam = () => {
                 </ListGroup>
               </Card>
             )}
-
             {/* Preview & Save */}
             <div className="d-flex gap-2 mt-4">
               <Button
@@ -638,29 +820,71 @@ const CreateExam = () => {
           <p>
             <strong>Duration:</strong> {examData.time} minutes <br />
             <strong>Date:</strong> {examDate} <br />
-            <strong>Start Time:</strong> {startTime}
+            <strong>Start Time:</strong> {startTime} <br />
+            <strong>Category:</strong> {examCategory}
           </p>
+
           <hr />
-          {questions.map((q, i) => (
-            <div key={i} className="mb-3">
-              <h6>
-                {i + 1}. {q.questionText}
-              </h6>
-              <ul>
-                {q.options.map((opt, j) => (
-                  <li
-                    key={j}
-                    style={{
-                      fontWeight: q.correctAnswer === j ? "bold" : "normal",
-                      color: q.correctAnswer === j ? "green" : "inherit",
-                    }}
-                  >
-                    {opt}
-                  </li>
-                ))}
-              </ul>
+          {/* Exam Instructions — show only when category is CODING */}
+          {(examCategory || "").toUpperCase() === "CODING" && (
+            <>
+              <h6 className="mb-2">Exam Instructions</h6>
+              <div
+                className="p-3 border rounded bg-light"
+                style={{ whiteSpace: "pre-wrap" }}
+              >
+                {(examInstructions || "").trim() ? (
+                  examInstructions
+                ) : (
+                  <em>No instructions provided yet.</em>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Optional attached file */}
+          {examFile && (
+            <div className="mt-2">
+              <strong>Attachment:</strong> {examFile.name}
+              {typeof examFile.size === "number" && (
+                <small className="text-muted ms-2">
+                  ({Math.round(examFile.size / 1024)} KB)
+                </small>
+              )}
             </div>
-          ))}
+          )}
+
+          <hr />
+
+          {/* Questions Preview (QA only) */}
+          {(examCategory || "").toUpperCase() === "QA" &&
+            (Array.isArray(questions) && questions.length > 0 ? (
+              questions.map((q, i) => (
+                <div key={i} className="mb-3">
+                  <h6>
+                    {i + 1}. {q.questionText}
+                  </h6>
+                  <ul>
+                    {(q.options || []).map((opt, j) => (
+                      <li
+                        key={j}
+                        style={{
+                          fontWeight: q.correctAnswer === j ? "bold" : "normal",
+                          color: q.correctAnswer === j ? "green" : "inherit",
+                        }}
+                      >
+                        {opt}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))
+            ) : (
+              <p className="text-muted mb-0">
+                <em>No questions added yet.</em>
+              </p>
+            ))}
+
           <hr />
           <h6>Enrolled Students:</h6>
           <ul>

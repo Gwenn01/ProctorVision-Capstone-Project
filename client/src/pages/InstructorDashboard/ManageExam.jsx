@@ -26,6 +26,10 @@ const ManageExam = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // NEW: instructions state + saving flag
+  const [examInstructions, setExamInstructions] = useState("");
+  const [savingInstructions, setSavingInstructions] = useState(false);
+
   // NEW states for question editor
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
@@ -49,23 +53,32 @@ const ManageExam = () => {
     if (instructorId) fetchExams();
   }, [instructorId]);
 
-  // ✅ Fetch students AND questions for the selected exam
+  //  Fetch students, all students, questions, AND instructions
   const fetchExamData = async (examId) => {
     try {
       setLoading(true);
-      const [enrolledRes, allRes, questionsRes] = await Promise.all([
+
+      const [enrolledRes, allRes, questionsRes, instrRes] = await Promise.all([
         axios.get(`http://localhost:5000/api/exam_students/${examId}`),
         axios.get("http://localhost:5000/api/students"),
         axios.get(`http://localhost:5000/api/exam_questions/${examId}`),
+        axios.get(`http://localhost:5000/api/exam_instructions/${examId}`, {
+          //  allow 404 so Promise.all doesn't reject
+          validateStatus: (s) => (s >= 200 && s < 300) || s === 404,
+        }),
       ]);
+
       setEnrolledStudents(enrolledRes.data);
       setAllStudents(allRes.data);
-      setSelectedExam((prev) => ({
-        ...prev,
-        questions: questionsRes.data,
-      }));
+      setSelectedExam((prev) => ({ ...prev, questions: questionsRes.data }));
+
+      // default to empty string if 404 or missing
+      setExamInstructions(
+        instrRes.status === 404 ? "" : instrRes?.data?.instructions ?? ""
+      );
     } catch (err) {
       console.error("Failed to fetch exam data", err);
+      setExamInstructions("");
     } finally {
       setLoading(false);
     }
@@ -180,6 +193,26 @@ const ManageExam = () => {
     });
     setShowQuestionModal(true);
   };
+  // handle instructions save
+  const handleSaveInstructions = async () => {
+    if (!selectedExam?.id) return;
+    if (!examInstructions.trim()) {
+      toast.error("Instructions cannot be empty.");
+      return;
+    }
+    try {
+      setSavingInstructions(true);
+      await axios.put(
+        `http://localhost:5000/api/exam_instructions/${selectedExam.id}`,
+        { instructions: examInstructions }
+      );
+      toast.success("Instructions saved");
+    } catch (err) {
+      toast.error("Failed to save instructions");
+    } finally {
+      setSavingInstructions(false);
+    }
+  };
 
   const renderTable = (items, type) => (
     <Card className="shadow-sm border-0 p-3">
@@ -255,6 +288,8 @@ const ManageExam = () => {
     </Card>
   );
 
+  const isMCQ = (selectedExam?.questions?.length || 0) > 0;
+
   return (
     <Container fluid className="py-4 px-3 px-md-5">
       <ToastContainer autoClose={3000} />
@@ -306,13 +341,7 @@ const ManageExam = () => {
           <Modal.Header closeButton className="bg-dark text-white">
             <Modal.Title>
               <i className="bi bi-info-circle me-2"></i>
-              Edit {selectedExam.title}{" "}
-              <Badge
-                bg={selectedExam.exam_type === "Exam" ? "primary" : "info"}
-                className="ms-2"
-              >
-                {selectedExam.exam_type}
-              </Badge>
+              Edit {selectedExam.title}
             </Modal.Title>
           </Modal.Header>
           <Modal.Body style={{ maxHeight: "500px", overflowY: "auto" }}>
@@ -390,20 +419,6 @@ const ManageExam = () => {
                 }
               />
             </Form.Group>
-
-            {/* File */}
-            {selectedExam.exam_file && (
-              <div className="mb-3">
-                <strong>File:</strong>{" "}
-                <a
-                  href={`http://localhost:5000/${selectedExam.exam_file}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View File
-                </a>
-              </div>
-            )}
 
             <Button
               variant="primary"
@@ -486,26 +501,97 @@ const ManageExam = () => {
               </Button>
             </Form.Group>
 
-            {/* Questions */}
+            {/* Exam Instructions */}
+            <h5 className="mt-2">Exam Instructions</h5>
+            {loading ? (
+              <div className="text-center my-3">
+                <Spinner animation="border" variant="primary" />
+              </div>
+            ) : isMCQ ? (
+              //  QA/MCQ: no instructions editor
+              <Card className="border-0 bg-light">
+                <Card.Body className="text-muted">
+                  <i className="bi bi-list-check me-2"></i>
+                  This is a <strong>Question & Answer</strong> exam. There are
+                  no editable instructions. Students will answer the questions
+                  below.
+                  {selectedExam?.exam_file ? (
+                    <>
+                      {" "}
+                      If needed, see the attached file:{" "}
+                      <a
+                        href={`http://localhost:5000/${String(
+                          selectedExam.exam_file
+                        ).replace(/\\/g, "/")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View Attachment
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    ""
+                  )}
+                </Card.Body>
+              </Card>
+            ) : (
+              //  CODING: show instructions editor
+              <>
+                <Form.Group className="mb-3">
+                  <Form.Control
+                    as="textarea"
+                    rows={4}
+                    placeholder="Enter clear instructions for the exam"
+                    value={examInstructions}
+                    onChange={(e) => setExamInstructions(e.target.value)}
+                  />
+                </Form.Group>
+                <div className="d-flex justify-content-end mb-3">
+                  <Button
+                    variant="outline-secondary"
+                    onClick={handleSaveInstructions}
+                    disabled={savingInstructions}
+                  >
+                    {savingInstructions ? (
+                      <>
+                        <Spinner
+                          size="sm"
+                          animation="border"
+                          className="me-2"
+                        />{" "}
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-save me-1"></i> Save Instructions
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {/* Question Exam */}
             <h5 className="mt-4">Questions</h5>
             {loading ? (
               <div className="text-center my-3">
                 <Spinner animation="border" variant="primary" />
               </div>
-            ) : (
-              <div
-                className="mb-4"
-                style={{ maxHeight: "300px", overflowY: "auto" }}
-              >
-                <ul className="list-group">
-                  {selectedExam.questions &&
-                    selectedExam.questions.map((q, qIndex) => (
+            ) : isMCQ ? (
+              <>
+                <div
+                  className="mb-4"
+                  style={{ maxHeight: "300px", overflowY: "auto" }}
+                >
+                  <ul className="list-group">
+                    {(selectedExam?.questions || []).map((q, qIndex) => (
                       <li key={q.id || qIndex} className="list-group-item">
                         <div className="fw-bold">
                           {qIndex + 1}. {q.question_text}
                         </div>
                         <ul className="mb-2">
-                          {q.options.map((opt, i) => (
+                          {(q.options || []).map((opt, i) => (
                             <li
                               key={opt.id || i}
                               style={{
@@ -535,16 +621,45 @@ const ManageExam = () => {
                         </div>
                       </li>
                     ))}
-                </ul>
-              </div>
+                  </ul>
+                </div>
+
+                <Button
+                  variant="success"
+                  className="w-100"
+                  onClick={handleAddQuestion}
+                >
+                  <i className="bi bi-plus-circle me-1"></i> Add Question
+                </Button>
+              </>
+            ) : (
+              //  CODING: no MCQ list
+              <Card className="border-0 bg-light">
+                <Card.Body className="text-muted">
+                  <i className="bi bi-code-square me-2"></i>
+                  This is a <strong>CODING/Instruction</strong> exam. There are
+                  no MCQ questions. Students will follow the instructions above.
+                  {selectedExam?.exam_file ? (
+                    <>
+                      {" "}
+                      See the attached file:{" "}
+                      <a
+                        href={`http://localhost:5000/${String(
+                          selectedExam.exam_file
+                        ).replace(/\\/g, "/")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View Attachment
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    ""
+                  )}
+                </Card.Body>
+              </Card>
             )}
-            <Button
-              variant="success"
-              className="w-100"
-              onClick={handleAddQuestion}
-            >
-              <i className="bi bi-plus-circle me-1"></i> Add Question
-            </Button>
           </Modal.Body>
         </Modal>
       )}

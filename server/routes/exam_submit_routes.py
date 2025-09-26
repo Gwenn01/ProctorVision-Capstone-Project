@@ -74,7 +74,7 @@ def submit_exam():
             (score, total_score, submission_id),
         )
 
-        # (Optional) return per-question review so your modal can show it immediately
+        # return per-question review so your modal can show it immediately
         cursor.execute("""
             SELECT 
                 q.id AS question_id,

@@ -24,12 +24,12 @@ def get_exam_questions(exam_id):
             )
             options = cursor.fetchall()
 
-            # ✅ Ensure option_text is always a string
+            #  Ensure option_text is always a string
             for opt in options:
                 opt["option_text"] = str(opt["option_text"])
 
             q["options"] = options
-            # ✅ Add correct_answer index (for frontend)
+            #  Add correct_answer index (for frontend)
             q["correct_answer"] = next(
                 (i for i, opt in enumerate(options) if opt["is_correct"]), None
             )

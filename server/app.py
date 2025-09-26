@@ -43,6 +43,8 @@ from routes.manage_users_routes import manage_users_bp
 from routes.instructor_exam_routes import instructor_exam_bp
 from routes.enrollment_routes import enrollment_bp
 from routes.exam_routes import exam_bp
+from routes.exam_instructions_routes import exam_instructions_bp
+from routes.parse_instructions_routes import parse_instructions_bp
 from routes.parse_question_routes import parse_question_bp
 from routes.manage_exam_routes import manage_exam_routes
 from routes.file_routes import file_bp
@@ -69,7 +71,9 @@ app.register_blueprint(manage_users_bp, url_prefix="/api")
 app.register_blueprint(instructor_exam_bp, url_prefix='/api')
 app.register_blueprint(enrollment_bp, url_prefix="/api")
 app.register_blueprint(exam_bp, url_prefix="/api")
+app.register_blueprint(parse_instructions_bp, url_prefix="/api")
 app.register_blueprint(parse_question_bp, url_prefix="/api")
+app.register_blueprint(exam_instructions_bp, url_prefix="/api")
 app.register_blueprint(manage_exam_routes, url_prefix='/api')
 app.register_blueprint(file_bp)
 app.register_blueprint(exam_students_bp, url_prefix='/api')

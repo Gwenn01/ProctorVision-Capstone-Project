@@ -590,19 +590,37 @@ const ManageExam = () => {
                         <div className="fw-bold">
                           {qIndex + 1}. {q.question_text}
                         </div>
-                        <ul className="mb-2">
-                          {(q.options || []).map((opt, i) => (
-                            <li
-                              key={opt.id || i}
-                              style={{
-                                fontWeight: opt.is_correct ? "bold" : "normal",
-                                color: opt.is_correct ? "green" : "inherit",
-                              }}
-                            >
-                              {opt.option_text}
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="mb-2">
+                          {q.question_type === "mcq" ? (
+                            <ul>
+                              {(q.options || []).map((opt, i) => (
+                                <li
+                                  key={opt.id || i}
+                                  style={{
+                                    fontWeight: opt.is_correct
+                                      ? "bold"
+                                      : "normal",
+                                    color: opt.is_correct ? "green" : "inherit",
+                                  }}
+                                >
+                                  {String.fromCharCode(65 + i)}.{" "}
+                                  {opt.option_text}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : q.question_type === "identification" ? (
+                            <p>
+                              <strong>Answer:</strong>{" "}
+                              <span className="text-success fw-bold">
+                                {q.correct_answer || "________"}
+                              </span>
+                            </p>
+                          ) : (
+                            <p className="fst-italic text-muted">
+                              Essay question – students will answer manually.
+                            </p>
+                          )}
+                        </div>
                         <div className="d-flex gap-2">
                           <Button
                             variant="outline-primary"
@@ -677,6 +695,35 @@ const ManageExam = () => {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {/* Question Type Selector */}
+          <Form.Group className="mb-3">
+            <Form.Label>Question Type</Form.Label>
+            <Form.Select
+              value={editingQuestion?.question_type || "mcq"}
+              onChange={(e) =>
+                setEditingQuestion({
+                  ...editingQuestion,
+                  question_type: e.target.value,
+                  options:
+                    e.target.value === "mcq"
+                      ? editingQuestion.options || ["", ""]
+                      : [],
+                  correct_answer:
+                    e.target.value === "mcq"
+                      ? null
+                      : e.target.value === "identification"
+                      ? editingQuestion.correct_answer || ""
+                      : null,
+                })
+              }
+            >
+              <option value="mcq">Multiple Choice</option>
+              <option value="identification">Identification</option>
+              <option value="essay">Essay</option>
+            </Form.Select>
+          </Form.Group>
+
+          {/* Question Text */}
           <Form.Group className="mb-3">
             <Form.Label>Question Text</Form.Label>
             <Form.Control
@@ -691,48 +738,81 @@ const ManageExam = () => {
             />
           </Form.Group>
 
-          {editingQuestion?.options?.map((opt, i) => (
-            <div key={i} className="d-flex align-items-center mb-2 gap-2">
-              <Form.Control
-                type="text"
-                value={opt.option_text}
-                placeholder={`Option ${i + 1}`}
-                onChange={(e) => {
-                  const newOptions = [...editingQuestion.options];
-                  newOptions[i] = e.target.value;
+          {/* Conditional UI by type */}
+          {editingQuestion?.question_type === "mcq" && (
+            <>
+              {editingQuestion.options?.map((opt, i) => (
+                <div key={i} className="d-flex align-items-center mb-2 gap-2">
+                  <Form.Control
+                    type="text"
+                    value={opt.option_text || opt}
+                    placeholder={`Option ${i + 1}`}
+                    onChange={(e) => {
+                      const newOptions = [...editingQuestion.options];
+                      newOptions[i] =
+                        typeof newOptions[i] === "object"
+                          ? { ...newOptions[i], option_text: e.target.value }
+                          : e.target.value;
+                      setEditingQuestion({
+                        ...editingQuestion,
+                        options: newOptions,
+                      });
+                    }}
+                  />
+                  <Form.Check
+                    type="radio"
+                    name="correct"
+                    checked={
+                      editingQuestion.correct_answer === i ||
+                      editingQuestion.options[i]?.is_correct
+                    }
+                    onChange={() =>
+                      setEditingQuestion({
+                        ...editingQuestion,
+                        correct_answer: i,
+                      })
+                    }
+                    label="Correct"
+                  />
+                </div>
+              ))}
+
+              <Button
+                size="sm"
+                variant="outline-primary"
+                onClick={() =>
                   setEditingQuestion({
                     ...editingQuestion,
-                    options: newOptions,
-                  });
-                }}
-              />
-              <Form.Check
-                type="radio"
-                name="correct"
-                checked={editingQuestion.correct_answer === i}
-                onChange={() =>
-                  setEditingQuestion({
-                    ...editingQuestion,
-                    correct_answer: i,
+                    options: [...(editingQuestion.options || []), ""],
                   })
                 }
-                label="Correct"
-              />
-            </div>
-          ))}
+              >
+                <i className="bi bi-plus-circle me-1"></i> Add Option
+              </Button>
+            </>
+          )}
 
-          <Button
-            size="sm"
-            variant="outline-primary"
-            onClick={() =>
-              setEditingQuestion({
-                ...editingQuestion,
-                options: [...editingQuestion.options, ""],
-              })
-            }
-          >
-            <i className="bi bi-plus-circle me-1"></i> Add Option
-          </Button>
+          {editingQuestion?.question_type === "identification" && (
+            <Form.Group className="mb-3">
+              <Form.Label>Correct Answer</Form.Label>
+              <Form.Control
+                type="text"
+                value={editingQuestion.correct_answer || ""}
+                onChange={(e) =>
+                  setEditingQuestion({
+                    ...editingQuestion,
+                    correct_answer: e.target.value,
+                  })
+                }
+              />
+            </Form.Group>
+          )}
+
+          {editingQuestion?.question_type === "essay" && (
+            <p className="text-muted fst-italic">
+              Essay question – no correct answer, graded manually.
+            </p>
+          )}
         </Modal.Body>
         <Modal.Footer>
           <Button

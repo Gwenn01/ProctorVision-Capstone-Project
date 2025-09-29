@@ -12,27 +12,36 @@ def get_exam_questions(exam_id):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Get all questions
         cursor.execute("SELECT * FROM exam_questions WHERE exam_id = %s", (exam_id,))
         questions = cursor.fetchall()
 
-        # Attach options to each question
         for q in questions:
-            cursor.execute(
-                "SELECT id, option_text, is_correct FROM exam_options WHERE question_id = %s",
-                (q["id"],),
-            )
-            options = cursor.fetchall()
+            qtype = q.get("question_type", "mcq")
 
-            #  Ensure option_text is always a string
-            for opt in options:
-                opt["option_text"] = str(opt["option_text"])
+            if qtype == "mcq":
+                cursor.execute(
+                    "SELECT id, option_text, is_correct FROM exam_options WHERE question_id = %s",
+                    (q["id"],),
+                )
+                options = cursor.fetchall()
 
-            q["options"] = options
-            #  Add correct_answer index (for frontend)
-            q["correct_answer"] = next(
-                (i for i, opt in enumerate(options) if opt["is_correct"]), None
-            )
+                for opt in options:
+                    opt["option_text"] = str(opt["option_text"])
+                    opt["is_correct"] = bool(opt["is_correct"])
+
+                q["options"] = options
+                q["correct_answer"] = next(
+                    (i for i, opt in enumerate(options) if opt["is_correct"]), None
+                )
+
+            elif qtype == "identification":
+                q["options"] = []
+                # keep the stored text from DB
+                q["correct_answer"] = q.get("correct_answer")
+
+            else:  # essay or others
+                q["options"] = []
+                q["correct_answer"] = None
 
         conn.close()
         return jsonify(questions), 200
@@ -41,7 +50,7 @@ def get_exam_questions(exam_id):
 
 
 # -----------------------------
-# Add a question with options
+# Add a question (MCQ / Identification / Essay)
 # -----------------------------
 @exam_questions_bp.route("/exam_questions", methods=["POST"])
 def add_exam_question():
@@ -49,10 +58,11 @@ def add_exam_question():
         data = request.json
         exam_id = data.get("exam_id")
         question_text = data.get("question_text")
+        question_type = data.get("question_type", "mcq")  # default mcq
         options = data.get("options", [])
-        correct_answer = data.get("correct_answer")  # index of correct option
+        correct_answer = data.get("correct_answer")
 
-        if not exam_id or not question_text or not options:
+        if not exam_id or not question_text:
             return jsonify({"error": "Missing required fields"}), 400
 
         conn = get_db_connection()
@@ -60,18 +70,25 @@ def add_exam_question():
 
         # Insert question
         cursor.execute(
-            "INSERT INTO exam_questions (exam_id, question_text) VALUES (%s, %s)",
-            (exam_id, question_text),
+            "INSERT INTO exam_questions (exam_id, question_text, question_type, correct_answer) VALUES (%s, %s, %s, %s)",
+            (
+                exam_id,
+                question_text,
+                question_type,
+                correct_answer if question_type == "identification" else None,
+            ),
         )
         question_id = cursor.lastrowid
 
-        # Insert options
-        for i, opt in enumerate(options):
-            is_correct = 1 if i == correct_answer else 0
-            cursor.execute(
-                "INSERT INTO exam_options (question_id, option_text, is_correct) VALUES (%s, %s, %s)",
-                (question_id, opt, is_correct),
-            )
+        # If MCQ, insert options
+        if question_type == "mcq":
+            for i, opt in enumerate(options):
+                option_text = opt if isinstance(opt, str) else opt.get("option_text")
+                is_correct = 1 if i == correct_answer else 0
+                cursor.execute(
+                    "INSERT INTO exam_options (question_id, option_text, is_correct) VALUES (%s, %s, %s)",
+                    (question_id, option_text, is_correct),
+                )
 
         conn.commit()
         conn.close()
@@ -81,35 +98,41 @@ def add_exam_question():
 
 
 # -----------------------------
-# Update a question (and options)
+# Update a question (MCQ / Identification / Essay)
 # -----------------------------
 @exam_questions_bp.route("/exam_questions/<int:question_id>", methods=["PUT"])
 def update_exam_question(question_id):
     try:
         data = request.json
         question_text = data.get("question_text")
+        question_type = data.get("question_type", "mcq")
         options = data.get("options", [])
         correct_answer = data.get("correct_answer")
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Update question text
+        # Update main question
         cursor.execute(
-            "UPDATE exam_questions SET question_text = %s WHERE id = %s",
-            (question_text, question_id),
+            "UPDATE exam_questions SET question_text = %s, question_type = %s, correct_answer = %s WHERE id = %s",
+            (
+                question_text,
+                question_type,
+                correct_answer if question_type == "identification" else None,
+                question_id,
+            ),
         )
 
-        # Delete old options
+        # For MCQ, replace options
         cursor.execute("DELETE FROM exam_options WHERE question_id = %s", (question_id,))
-
-        # Insert new options
-        for i, opt in enumerate(options):
-            is_correct = 1 if i == correct_answer else 0
-            cursor.execute(
-                "INSERT INTO exam_options (question_id, option_text, is_correct) VALUES (%s, %s, %s)",
-                (question_id, opt, is_correct),
-            )
+        if question_type == "mcq":
+            for i, opt in enumerate(options):
+                option_text = opt if isinstance(opt, str) else opt.get("option_text")
+                is_correct = 1 if i == correct_answer else 0
+                cursor.execute(
+                    "INSERT INTO exam_options (question_id, option_text, is_correct) VALUES (%s, %s, %s)",
+                    (question_id, option_text, is_correct),
+                )
 
         conn.commit()
         conn.close()
@@ -146,26 +169,35 @@ def get_exam_with_questions(exam_id):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Fetch questions
         cursor.execute("SELECT * FROM exam_questions WHERE exam_id = %s", (exam_id,))
         questions = cursor.fetchall()
 
         for q in questions:
-            cursor.execute(
-                "SELECT id, option_text, is_correct FROM exam_options WHERE question_id = %s",
-                (q["id"],),
-            )
-            options = cursor.fetchall()
+            qtype = q.get("question_type", "mcq")
 
-            for opt in options:
-                opt["option_text"] = str(opt["option_text"])
-                opt["is_correct"] = bool(opt["is_correct"])
+            if qtype == "mcq":
+                cursor.execute(
+                    "SELECT id, option_text, is_correct FROM exam_options WHERE question_id = %s",
+                    (q["id"],),
+                )
+                options = cursor.fetchall()
 
-            q["options"] = options
-          
-            q["correct_answer"] = next(
-                (i for i, opt in enumerate(options) if opt["is_correct"]), None
-            )
+                for opt in options:
+                    opt["option_text"] = str(opt["option_text"])
+                    opt["is_correct"] = bool(opt["is_correct"])
+
+                q["options"] = options
+                q["correct_answer"] = next(
+                    (i for i, opt in enumerate(options) if opt["is_correct"]), None
+                )
+
+            elif qtype == "identification":
+                q["options"] = []
+                q["correct_answer"] = q.get("correct_answer")
+
+            else:  # essay
+                q["options"] = []
+                q["correct_answer"] = None
 
         conn.close()
         return jsonify(questions), 200

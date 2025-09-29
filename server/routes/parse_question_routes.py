@@ -10,18 +10,61 @@ parse_question_bp = Blueprint("parse_question", __name__)
 UPLOAD_FOLDER = "uploads/question_files"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Regex patterns
 Q_RE = re.compile(r"^\s*(?:q(?:uestion)?\s*\d*[\.\):-]?\s*)(.*)$", re.I)
 OPT_RE = re.compile(r"^\s*([A-D])[\.\)]\s*(.+)$", re.I)
 
+# Keywords to detect essay questions
+ESSAY_KEYWORDS = [
+    "explain",
+    "describe",
+    "discuss",
+    "essay",
+    "in detail",
+    "why",
+    "how",
+]
+
+
 def _flush(q, out):
-    if q and (q["questionText"] or q["options"]):
-        out.append(q)
+    """Finalize a question and detect its type before appending."""
+    if not q:
+        return
+
+    text = (q.get("questionText") or "").lower()
+    opts = q.get("options", [])
+
+    if len(opts) >= 2:
+        # Multiple choice
+        q["type"] = "mcq"
+        q["correctAnswer"] = None
+    elif any(word in text for word in ESSAY_KEYWORDS):
+        # Essay
+        q["type"] = "essay"
+        q["options"] = []
+        q["correctAnswer"] = None
+    else:
+        # Identification (short answer)
+        q["type"] = "identification"
+        q["options"] = []
+        q["correctAnswer"] = ""
+
+    out.append(q)
+
 
 def _new_q(text):
+    """Start a new question object."""
     m = Q_RE.match(text)
-    return {"questionText": (m.group(1) if m else text).strip(), "options": [], "correctAnswer": None}
+    return {
+        "questionText": (m.group(1) if m else text).strip(),
+        "options": [],
+        "correctAnswer": None,
+        "type": None,  # will be set in _flush
+    }
+
 
 def _try_option(line):
+    """Check if a line is an option like A. Something"""
     m = OPT_RE.match(line)
     if not m:
         return None
@@ -30,7 +73,9 @@ def _try_option(line):
     index = ord(letter) - ord("A")  # A->0, B->1, ...
     return index, body
 
+
 def _parse_lines(lines):
+    """Convert lines of text into structured questions."""
     questions = []
     q = None
     for raw in lines:
@@ -52,10 +97,9 @@ def _parse_lines(lines):
                 # If options appear before a question line, start a generic question
                 q = _new_q("Untitled question")
             q["options"].append(body)
-            # (Optional) set correct by marker; you can extend to detect "Correct: B"
             continue
 
-        # Otherwise, treat as continuation of the current question text
+        # Continuation of the question text
         if q is None:
             q = _new_q(text)
         else:
@@ -63,6 +107,7 @@ def _parse_lines(lines):
 
     _flush(q, questions)
     return questions
+
 
 @parse_question_bp.route("/parse-questions", methods=["POST"])
 def parse_questions():
@@ -86,7 +131,6 @@ def parse_questions():
             reader = PdfReader(filepath)
             for page in reader.pages:
                 text = page.extract_text() or ""
-                # Some PDFs return None for pages; handle gracefully
                 if text:
                     lines.extend(text.splitlines())
 
@@ -97,4 +141,5 @@ def parse_questions():
         return jsonify({"questions": questions}), 200
 
     except Exception as e:
+        print("❌ Error in parse-questions:", str(e))
         return jsonify({"error": str(e)}), 500

@@ -116,7 +116,6 @@ const CreateExam = () => {
   };
 
   // state you already have:
-
   const handleUploadInstructionFile = async (file) => {
     if (!file) return;
 
@@ -164,13 +163,40 @@ const CreateExam = () => {
   const addQuestion = () => {
     setQuestions([
       ...questions,
-      { questionText: "", options: ["", ""], correctAnswer: null },
+      { questionText: "", type: "mcq", options: ["", ""], correctAnswer: null },
     ]);
   };
 
   const updateQuestionText = (qIndex, value) => {
     const updated = [...questions];
     updated[qIndex].questionText = value;
+    setQuestions(updated);
+  };
+
+  // Update type
+  const updateQuestionType = (qIndex, newType) => {
+    const updated = [...questions];
+    updated[qIndex].type = newType;
+
+    // Reset fields when switching types
+    if (newType === "mcq") {
+      updated[qIndex].options = ["", ""];
+      updated[qIndex].correctAnswer = null;
+    } else if (newType === "identification") {
+      updated[qIndex].options = [];
+      updated[qIndex].correctAnswer = "";
+    } else if (newType === "essay") {
+      updated[qIndex].options = [];
+      updated[qIndex].correctAnswer = null;
+    }
+
+    setQuestions(updated);
+  };
+
+  // Update correct answer for identification
+  const updateCorrectAnswer = (qIndex, value) => {
+    const updated = [...questions];
+    updated[qIndex].correctAnswer = value;
     setQuestions(updated);
   };
 
@@ -229,6 +255,44 @@ const CreateExam = () => {
     setQuestions((prev) =>
       prev.map((q, i) => (i === qIndex ? { ...q, correctAnswer: null } : q))
     );
+  };
+
+  // handle pasre exam from pdf or words
+  const handleUploadQuestionsFile = async (file) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      const res = await axios.post(
+        "http://localhost:5000/api/parse-questions",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+      // Merge parsed questions into state
+      // Merge parsed questions into state
+      setQuestions([
+        ...questions,
+        ...res.data.questions.map((q) => ({
+          questionText: q.questionText,
+          type: q.type || "mcq", // fallback
+          options: q.options || [],
+          correctAnswer: q.correctAnswer ?? null,
+        })),
+      ]);
+
+      // Attach the file to the exam so it gets persisted to DB on save
+      setExamFile(file);
+      toast.success("Questions imported! You can now edit them.");
+    } catch (err) {
+      toast.error("Failed to parse questions.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // save correct answers
@@ -294,34 +358,6 @@ const CreateExam = () => {
   const sectionOptions = [...new Set(allStudents.map((s) => s.section))];
 
   const isInvalid = (value) => !value || value === "";
-
-  // handle pasre exam from pdf or words
-  const handleUploadQuestionsFile = async (file) => {
-    if (!file) return;
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      setLoading(true);
-      const res = await axios.post(
-        "http://localhost:5000/api/parse-questions",
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
-      // Merge parsed questions into state
-      setQuestions([...questions, ...res.data.questions]);
-      // Attach the file to the exam so it gets persisted to DB on save
-      setExamFile(file);
-      toast.success("Questions imported! You can now edit them.");
-    } catch (err) {
-      toast.error("Failed to parse questions.");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <Container fluid className="py-4 px-3 px-md-5">
@@ -543,6 +579,27 @@ const CreateExam = () => {
                           {q.questionText || "Untitled Question"}
                         </Accordion.Header>
                         <Accordion.Body>
+                          {/* Question Type Selector */}
+                          <Form.Group className="mb-3">
+                            <Form.Label className="fw-semibold">
+                              Question Type
+                            </Form.Label>
+                            <Form.Select
+                              value={q.type || "mcq"}
+                              onChange={(e) =>
+                                updateQuestionType(qIndex, e.target.value)
+                              }
+                              disabled={loading}
+                            >
+                              <option value="mcq">Multiple Choice</option>
+                              <option value="identification">
+                                Identification
+                              </option>
+                              <option value="essay">Essay</option>
+                            </Form.Select>
+                          </Form.Group>
+
+                          {/* Question Text */}
                           <Form.Control
                             type="text"
                             placeholder="Enter question text"
@@ -558,66 +615,105 @@ const CreateExam = () => {
                             disabled={loading}
                           />
 
-                          {q.options.map((opt, oIndex) => (
-                            <div
-                              key={oIndex}
-                              className="d-flex align-items-center mb-2 gap-2"
-                            >
-                              <Form.Control
-                                type="text"
-                                placeholder={`Option ${oIndex + 1}`}
-                                value={opt}
-                                onChange={(e) =>
-                                  updateOption(qIndex, oIndex, e.target.value)
-                                }
-                                className={isInvalid(opt) ? "is-invalid" : ""}
-                                disabled={loading}
-                              />
-                              <Form.Check
-                                type="radio"
-                                name={`correct-${qIndex}`}
-                                checked={q.correctAnswer === oIndex}
-                                onChange={() =>
-                                  selectCorrectAnswer(qIndex, oIndex)
-                                }
-                                label="Correct"
-                                disabled={loading}
-                              />
-                              <Button
-                                size="sm"
-                                variant="outline-danger"
-                                onClick={() => removeOption(qIndex, oIndex)}
-                                disabled={loading || q.options.length <= 2}
-                              >
-                                <i className="bi bi-x-circle"></i>
-                              </Button>
-                            </div>
-                          ))}
+                          {/* Conditional Rendering by Question Type */}
+                          {q.type === "mcq" && (
+                            <>
+                              {q.options.map((opt, oIndex) => (
+                                <div
+                                  key={oIndex}
+                                  className="d-flex align-items-center mb-2 gap-2"
+                                >
+                                  <Form.Control
+                                    type="text"
+                                    placeholder={`Option ${oIndex + 1}`}
+                                    value={opt}
+                                    onChange={(e) =>
+                                      updateOption(
+                                        qIndex,
+                                        oIndex,
+                                        e.target.value
+                                      )
+                                    }
+                                    className={
+                                      isInvalid(opt) ? "is-invalid" : ""
+                                    }
+                                    disabled={loading}
+                                  />
+                                  <Form.Check
+                                    type="radio"
+                                    name={`correct-${qIndex}`}
+                                    checked={q.correctAnswer === oIndex}
+                                    onChange={() =>
+                                      selectCorrectAnswer(qIndex, oIndex)
+                                    }
+                                    label="Correct"
+                                    disabled={loading}
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="outline-danger"
+                                    onClick={() => removeOption(qIndex, oIndex)}
+                                    disabled={loading || q.options.length <= 2}
+                                  >
+                                    <i className="bi bi-x-circle"></i>
+                                  </Button>
+                                </div>
+                              ))}
+                            </>
+                          )}
 
-                          {/* Actions row */}
+                          {q.type === "identification" && (
+                            <Form.Control
+                              type="text"
+                              placeholder="Enter correct answer"
+                              value={q.correctAnswer || ""}
+                              onChange={(e) =>
+                                updateCorrectAnswer(qIndex, e.target.value)
+                              }
+                              className={
+                                isInvalid(q.correctAnswer)
+                                  ? "is-invalid mb-3"
+                                  : "mb-3"
+                              }
+                              disabled={loading}
+                            />
+                          )}
+
+                          {q.type === "essay" && (
+                            <p className="text-muted">
+                              Essay question – students will write their answer
+                              manually.
+                            </p>
+                          )}
+
+                          {/* ✅ Unified footer row */}
                           <div className="d-flex justify-content-between align-items-center mt-3">
-                            <div className="d-flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline-primary"
-                                onClick={() => addOption(qIndex)}
-                                disabled={loading}
-                              >
-                                <i className="bi bi-plus-circle me-1"></i> Add
-                                Option
-                              </Button>
+                            {/* Left side only for MCQ */}
+                            {q.type === "mcq" && (
+                              <div className="d-flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline-primary"
+                                  onClick={() => addOption(qIndex)}
+                                  disabled={loading}
+                                >
+                                  <i className="bi bi-plus-circle me-1"></i> Add
+                                  Option
+                                </Button>
 
-                              <Button
-                                size="sm"
-                                variant="outline-secondary"
-                                onClick={() => clearCorrectAnswer(qIndex)}
-                                disabled={loading || q.correctAnswer === null}
-                              >
-                                <i className="bi bi-eraser me-1"></i> Clear
-                                Correct
-                              </Button>
-                            </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline-secondary"
+                                  onClick={() => clearCorrectAnswer(qIndex)}
+                                  disabled={loading || q.correctAnswer === null}
+                                >
+                                  <i className="bi bi-eraser me-1"></i> Clear
+                                  Correct
+                                </Button>
+                              </div>
+                            )}
 
+                            {/* Right side always = Delete */}
                             <Button
                               size="sm"
                               variant="outline-danger"
@@ -642,7 +738,7 @@ const CreateExam = () => {
                     <i className="bi bi-plus-lg me-1"></i> Add Question
                   </Button>
 
-                  {/* Upload MCQ questions file */}
+                  {/* Upload Questions File */}
                   <Form.Group className="mb-4 mt-3">
                     <Form.Label className="fw-semibold">
                       Upload Question File (PDF or DOCX)
@@ -662,6 +758,7 @@ const CreateExam = () => {
                 </Card.Body>
               </Card>
             )}
+
             {/* Student Assignment */}
             <hr />
             <h5 className="fw-bold">Assign Students</h5>
@@ -860,23 +957,43 @@ const CreateExam = () => {
           {(examCategory || "").toUpperCase() === "QA" &&
             (Array.isArray(questions) && questions.length > 0 ? (
               questions.map((q, i) => (
-                <div key={i} className="mb-3">
-                  <h6>
+                <div key={i} className="mb-3 p-3 border rounded bg-light">
+                  <h6 className="fw-bold">
                     {i + 1}. {q.questionText}
                   </h6>
-                  <ul>
-                    {(q.options || []).map((opt, j) => (
-                      <li
-                        key={j}
-                        style={{
-                          fontWeight: q.correctAnswer === j ? "bold" : "normal",
-                          color: q.correctAnswer === j ? "green" : "inherit",
-                        }}
-                      >
-                        {opt}
-                      </li>
-                    ))}
-                  </ul>
+
+                  {/* Preview based on type */}
+                  {q.type === "mcq" && (
+                    <ul className="list-unstyled ms-3">
+                      {(q.options || []).map((opt, j) => (
+                        <li
+                          key={j}
+                          style={{
+                            fontWeight:
+                              q.correctAnswer === j ? "bold" : "normal",
+                            color: q.correctAnswer === j ? "green" : "inherit",
+                          }}
+                        >
+                          {String.fromCharCode(65 + j)}. {opt}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {q.type === "identification" && (
+                    <p className="text-primary ms-2">
+                      <em>Answer:</em>{" "}
+                      <span className="fw-semibold">
+                        {q.correctAnswer || "_________"}
+                      </span>
+                    </p>
+                  )}
+
+                  {q.type === "essay" && (
+                    <p className="text-muted ms-2 fst-italic">
+                      Essay question – answer will be written by the student.
+                    </p>
+                  )}
                 </div>
               ))
             ) : (

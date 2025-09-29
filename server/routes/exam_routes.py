@@ -104,23 +104,34 @@ def create_exam():
             for q in questions:
                 question_text = (q.get("questionText") or "").strip()
                 if not question_text:
-                    # skip empty question shells
                     continue
+
+                question_type = q.get("type", "mcq")  # default to mcq
+                correct_answer = None
+
+                if question_type == "identification":
+                    correct_answer = (q.get("correctAnswer") or "").strip()
+                elif question_type == "essay":
+                    correct_answer = None
+
+                # Insert into exam_questions
                 cursor.execute(
-                    "INSERT INTO exam_questions (exam_id, question_text) VALUES (%s, %s)",
-                    (exam_id, question_text)
+                    "INSERT INTO exam_questions (exam_id, question_text, question_type, correct_answer) VALUES (%s, %s, %s, %s)",
+                    (exam_id, question_text, question_type, correct_answer)
                 )
                 question_id = cursor.lastrowid
 
-                opts = q.get("options", []) or []
-                correct_index = q.get("correctAnswer", None)
-                for i, opt in enumerate(opts):
-                    option_text = str(opt)
-                    is_correct = (i == correct_index)
-                    cursor.execute(
-                        "INSERT INTO exam_options (question_id, option_text, is_correct) VALUES (%s, %s, %s)",
-                        (question_id, option_text, is_correct)
-                    )
+                # Only insert options for MCQ
+                if question_type == "mcq":
+                    opts = q.get("options", []) or []
+                    correct_index = q.get("correctAnswer", None)
+                    for i, opt in enumerate(opts):
+                        option_text = str(opt)
+                        is_correct = (i == correct_index)
+                        cursor.execute(
+                            "INSERT INTO exam_options (question_id, option_text, is_correct) VALUES (%s, %s, %s)",
+                            (question_id, option_text, is_correct)
+                        )
 
         conn.commit()
 

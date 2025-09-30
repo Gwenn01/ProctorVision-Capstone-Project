@@ -181,19 +181,41 @@ const TakeExam = () => {
   }, []);
 
   // Load exam text
+  // Load exam instructions (from DB or file)
   useEffect(() => {
-    if (selectedExam && selectedExam.exam_file) {
-      const filename = selectedExam.exam_file
-        .replaceAll("\\", "/")
-        .split("/")
-        .pop();
-      axios
-        .get(`${API_BASE}/api/exam_text/${filename}`)
-        .then((res) => setExamText(res.data.content))
-        .catch((err) => console.error("Failed to load exam text:", err));
-    } else {
+    if (!selectedExam) {
       setExamText("");
+      return;
     }
+
+    // Try fetching from exam_instructions API
+    axios
+      .get(`${API_BASE}/api/exam_instructions/${selectedExam.id}`)
+      .then((res) => {
+        if (res.data && res.data.instructions) {
+          // ✅ Found instructions in DB
+          setExamText(res.data.instructions);
+        } else if (selectedExam.exam_file) {
+          // ⬇️ Fallback to file if DB empty
+          const filename = selectedExam.exam_file
+            .replaceAll("\\", "/")
+            .split("/")
+            .pop();
+
+          axios
+            .get(`${API_BASE}/api/exam_text/${filename}`)
+            .then((res2) => setExamText(res2.data.content))
+            .catch((err) =>
+              console.error("Failed to load exam text from file:", err)
+            );
+        } else {
+          setExamText("");
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load exam instructions:", err);
+        setExamText("");
+      });
   }, [selectedExam]);
 
   const handleExamSelect = (e) => {
@@ -633,9 +655,10 @@ const TakeExam = () => {
                   {selectedExam.exam_type}
                 </span>
               </Card.Header>
+
               <Card.Body>
-                {/* Timer */}
-                <div className="d-flex justify-content-between align-items-center mb-3">
+                {/* Timer (inside exam card, not full width) */}
+                <div className="mb-3 d-flex justify-content-between align-items-center">
                   <span className="fw-semibold">
                     Time Remaining: {formatTime(timer)}
                   </span>
@@ -647,86 +670,126 @@ const TakeExam = () => {
                   <span>{selectedExam.duration_minutes} min</span>
                 </div>
 
-                {/* Exam Instructions (from file) */}
-                {examText && (
-                  <div className="border rounded p-3 bg-light-subtle mb-3">
-                    <pre className="mb-0">{examText}</pre>
-                  </div>
+                {/* Coding Exam Instructions */}
+                {selectedExam?.exam_type === "Coding" ? (
+                  <Card className="shadow-sm border-0 mb-4">
+                    <Card.Header className="bg-dark text-white">
+                      <i className="bi bi-code-slash me-2"></i> Coding Exam
+                      Instructions
+                    </Card.Header>
+                    <Card.Body>
+                      {examText ? (
+                        <div className="p-4 rounded border bg-light">
+                          <h5 className="fw-bold text-center text-primary mb-3">
+                            Exam Instructions
+                          </h5>
+                          <div
+                            className="text-start mx-auto"
+                            style={{
+                              maxWidth: "750px",
+                              lineHeight: "1.3",
+                              fontSize: "1.5rem",
+                              color: "#333",
+                            }}
+                          >
+                            {examText.split("\n").map((line, idx) => (
+                              <p key={idx} className="mb-2">
+                                {line}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-muted fst-italic text-center">
+                          No instructions available for this coding exam.
+                        </p>
+                      )}
+                    </Card.Body>
+                  </Card>
+                ) : (
+                  <>
+                    {/* Normal Q&A Exams */}
+                    {examText && (
+                      <div className="border rounded p-3 bg-light-subtle mb-3">
+                        <pre className="mb-0">{examText}</pre>
+                      </div>
+                    )}
+
+                    {/* Questions */}
+                    <div>
+                      {questions.map((q, idx) => (
+                        <Card key={q.id} className="mb-4 shadow-sm border-0">
+                          <Card.Body>
+                            {/* Question Title */}
+                            <h6 className="fw-bold mb-3">
+                              {idx + 1}. {q.question_text}
+                            </h6>
+
+                            {/* MCQ */}
+                            {q.question_type === "mcq" && (
+                              <Form>
+                                {q.options.map((opt) => (
+                                  <Form.Check
+                                    key={opt.id}
+                                    type="radio"
+                                    id={`q-${q.id}-opt-${opt.id}`}
+                                    name={`q-${q.id}`}
+                                    label={opt.option_text}
+                                    checked={studentAnswers[q.id] === opt.id}
+                                    onChange={() =>
+                                      handleAnswerSelect(q.id, opt.id)
+                                    }
+                                    className="mb-2 p-2 border rounded"
+                                    style={{
+                                      backgroundColor:
+                                        studentAnswers[q.id] === opt.id
+                                          ? "#e6f0ff"
+                                          : "#fff",
+                                      borderColor:
+                                        studentAnswers[q.id] === opt.id
+                                          ? "#0d6efd"
+                                          : "#dee2e6",
+                                      cursor: "pointer",
+                                    }}
+                                  />
+                                ))}
+                              </Form>
+                            )}
+
+                            {/* Identification */}
+                            {q.question_type === "identification" && (
+                              <Form.Control
+                                type="text"
+                                placeholder="Type your answer..."
+                                value={studentAnswers[q.id] || ""}
+                                onChange={(e) =>
+                                  handleAnswerSelect(q.id, e.target.value)
+                                }
+                                className="p-2 border rounded"
+                              />
+                            )}
+
+                            {/* Essay */}
+                            {q.question_type === "essay" && (
+                              <Form.Control
+                                as="textarea"
+                                rows={4}
+                                placeholder="Write your essay answer here..."
+                                value={studentAnswers[q.id] || ""}
+                                onChange={(e) =>
+                                  handleAnswerSelect(q.id, e.target.value)
+                                }
+                                className="p-2 border rounded"
+                              />
+                            )}
+                          </Card.Body>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
                 )}
 
-                {/* Questions */}
-                {questions.length > 0 && (
-                  <div>
-                    {questions.map((q, idx) => (
-                      <Card key={q.id} className="mb-4 shadow-sm border-0">
-                        <Card.Body>
-                          {/* Question Title */}
-                          <h6 className="fw-bold mb-3">
-                            {idx + 1}. {q.question_text}
-                          </h6>
-
-                          {/* Render by type */}
-                          {q.question_type === "mcq" && (
-                            <Form>
-                              {q.options.map((opt) => (
-                                <Form.Check
-                                  key={opt.id}
-                                  type="radio"
-                                  id={`q-${q.id}-opt-${opt.id}`}
-                                  name={`q-${q.id}`}
-                                  label={opt.option_text}
-                                  checked={studentAnswers[q.id] === opt.id}
-                                  onChange={() =>
-                                    handleAnswerSelect(q.id, opt.id)
-                                  }
-                                  className="mb-2 p-2 border rounded hover-bg"
-                                  style={{
-                                    backgroundColor:
-                                      studentAnswers[q.id] === opt.id
-                                        ? "#e6f0ff"
-                                        : "#fff",
-                                    borderColor:
-                                      studentAnswers[q.id] === opt.id
-                                        ? "#0d6efd"
-                                        : "#dee2e6",
-                                    cursor: "pointer",
-                                  }}
-                                />
-                              ))}
-                            </Form>
-                          )}
-
-                          {q.question_type === "identification" && (
-                            <Form.Control
-                              type="text"
-                              placeholder="Type your answer..."
-                              value={studentAnswers[q.id] || ""}
-                              onChange={(e) =>
-                                handleAnswerSelect(q.id, e.target.value)
-                              }
-                              className="p-2 border rounded"
-                            />
-                          )}
-
-                          {q.question_type === "essay" && (
-                            <Form.Control
-                              as="textarea"
-                              rows={4}
-                              placeholder="Write your essay answer here..."
-                              value={studentAnswers[q.id] || ""}
-                              onChange={(e) =>
-                                handleAnswerSelect(q.id, e.target.value)
-                              }
-                              className="p-2 border rounded"
-                            />
-                          )}
-                        </Card.Body>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-
-                {/* Submit */}
+                {/* Submit Button */}
                 <div className="text-end mt-3">
                   <Button
                     variant="danger"
@@ -741,12 +804,36 @@ const TakeExam = () => {
             </Card>
           </Col>
 
+          {/* Full-page overlay loader */}
+          {isSubmitting && (
+            <div
+              className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
+              style={{
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                zIndex: 2000,
+              }}
+            >
+              <div className="text-center">
+                <div
+                  className="spinner-border text-danger"
+                  role="status"
+                  style={{ width: "4rem", height: "4rem" }}
+                >
+                  <span className="visually-hidden">Submitting...</span>
+                </div>
+                <p className="mt-3 fw-semibold text-danger">
+                  Submitting exam, please wait...
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Camera Area */}
           <Col lg={4} className="mt-3 mt-lg-0">
             <div style={{ position: "sticky", top: "20px", zIndex: 1000 }}>
               <Card className="shadow border-0 rounded-3">
                 <Card.Header className="bg-dark text-white">
-                  <i className="bi bi-camera-video me-2"></i>Live Camera
+                  <i className="bi bi-camera-video me-2"></i> Live Camera
                 </Card.Header>
                 <Card.Body className="p-0 position-relative">
                   <video

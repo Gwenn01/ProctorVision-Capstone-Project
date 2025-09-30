@@ -24,7 +24,37 @@ def submit_exam():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Fetch all questions
+        # Fetch exam details
+        cursor.execute("SELECT * FROM exams WHERE id = %s", (exam_id,))
+        exam = cursor.fetchone()
+
+        if not exam:
+            return jsonify({"error": "Exam not found"}), 404
+
+        exam_category = exam.get("exam_category")  # QA or CODING
+        now = datetime.now()
+
+        # Handle CODING exams (no auto-grading, just record submission)
+        if exam_category and exam_category.upper() == "CODING":
+            cursor.execute("""
+                INSERT INTO exam_submissions (user_id, exam_id, score, total_score, submitted_at)
+                VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    submitted_at = VALUES(submitted_at),
+                    id = LAST_INSERT_ID(id)
+            """, (user_id, exam_id, 0, 0, now))
+            submission_id = cursor.lastrowid
+
+            conn.commit()
+            conn.close()
+
+            return jsonify({
+                "message": "Coding exam submitted successfully",
+                "exam_id": exam_id,
+                "category": "CODING"
+            }), 200
+
+        # Handle QA exams
         cursor.execute("SELECT * FROM exam_questions WHERE exam_id = %s", (exam_id,))
         questions = cursor.fetchall()
 
@@ -33,9 +63,7 @@ def submit_exam():
             conn.close()
             return jsonify({"error": "No questions found"}), 400
 
-        now = datetime.now()
-
-        # Insert submission (or update existing one)
+        # Insert submission record
         cursor.execute("""
             INSERT INTO exam_submissions (user_id, exam_id, score, total_score, submitted_at)
             VALUES (%s, %s, 0, %s, %s)
@@ -136,6 +164,7 @@ def submit_exam():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 # -----------------------------
 #  Get exam results with answers (for review)
 # -----------------------------
@@ -145,7 +174,7 @@ def get_exam_result():
     exam_id = request.args.get("exam_id")
 
     if not user_id or not exam_id:
-        return jsonify({"error": "Missing user_id or exam_id"}), 400
+        return jsonify({"error": "Missing usser_id or exam_id"}), 400
 
     try:
         conn = get_db_connection()

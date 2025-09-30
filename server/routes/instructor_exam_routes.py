@@ -63,14 +63,33 @@ def get_exams_by_instructor(instructor_id):
 # DELETE /api/exams/<int:exam_id>
 @instructor_exam_bp.route("/exams/<int:exam_id>", methods=["DELETE"])
 def delete_exam(exam_id):
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # Delete child records first (order matters to avoid FK issues)
+        cursor.execute(
+            "DELETE FROM exam_answers WHERE question_id IN (SELECT id FROM exam_questions WHERE exam_id=%s)",
+            (exam_id,)
+        )
+        cursor.execute(
+            "DELETE FROM exam_options WHERE question_id IN (SELECT id FROM exam_questions WHERE exam_id=%s)",
+            (exam_id,)
+        )
+        cursor.execute("DELETE FROM exam_questions WHERE exam_id=%s", (exam_id,))
+        cursor.execute("DELETE FROM exam_submissions WHERE exam_id=%s", (exam_id,))
+        cursor.execute("DELETE FROM exam_instructions WHERE exam_id=%s", (exam_id,))
+
+        # Finally, delete the exam itself
         cursor.execute("DELETE FROM exams WHERE id = %s", (exam_id,))
+
         conn.commit()
         return jsonify({"message": "Exam deleted successfully"}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
     finally:
         if conn:
             conn.close()

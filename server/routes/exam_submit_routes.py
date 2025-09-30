@@ -5,7 +5,7 @@ from datetime import datetime
 
 exam_submit_bp = Blueprint("exam_submit_bp", __name__)
 
-# -----------------------------
+## -----------------------------
 #  Submit Exam with answers and auto-score
 # -----------------------------
 @exam_submit_bp.route("/submit_exam", methods=["POST"])
@@ -13,28 +13,29 @@ def submit_exam():
     data = request.get_json(force=True) or {}
     user_id = data.get("user_id")
     exam_id = data.get("exam_id")
-    answers = data.get("answers") or {}  # may be {}
+    answers = data.get("answers") or {}
 
     if not user_id or not exam_id:
         return jsonify({"error": "Missing user_id or exam_id"}), 400
     if not isinstance(answers, dict):
-        return jsonify({"error": "answers must be an object {question_id: option_id}"}), 400
+        return jsonify({"error": "answers must be {question_id: answer}"}), 400
 
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # How many questions in this exam?
-        cursor.execute("SELECT id FROM exam_questions WHERE exam_id = %s", (exam_id,))
+        # Fetch all questions
+        cursor.execute("SELECT * FROM exam_questions WHERE exam_id = %s", (exam_id,))
         questions = cursor.fetchall()
+
         total_score = len(questions)
         if total_score == 0:
             conn.close()
-            return jsonify({"error": "No questions found for this exam"}), 400
+            return jsonify({"error": "No questions found"}), 400
 
         now = datetime.now()
 
-        # Insert or touch the submission; force LAST_INSERT_ID to existing row on duplicate
+        # Insert submission (or update existing one)
         cursor.execute("""
             INSERT INTO exam_submissions (user_id, exam_id, score, total_score, submitted_at)
             VALUES (%s, %s, 0, %s, %s)
@@ -44,54 +45,83 @@ def submit_exam():
         """, (user_id, exam_id, total_score, now))
         submission_id = cursor.lastrowid
 
-        # Score answered questions (empty dict is fine; nothing loops)
         score = 0
-        for q_id_raw, chosen_option in answers.items():
-            try:
-                q_id = int(q_id_raw)
-            except (TypeError, ValueError):
-                continue
+        review = []
 
-            cursor.execute(
-                "SELECT is_correct FROM exam_options WHERE id = %s AND question_id = %s",
-                (chosen_option, q_id),
-            )
-            row = cursor.fetchone()
-            is_correct = 1 if (row and row["is_correct"] == 1) else 0
-            score += is_correct
+        for q in questions:
+            q_id = q["id"]
+            q_type = q.get("question_type", "mcq")
+            student_answer = answers.get(str(q_id))
 
+            selected_option_id = None
+            selected_text = None
+            essay_answer = None
+            is_correct = None
+            correct_answer = None
+
+            # ----- MCQ -----
+            if q_type == "mcq":
+                cursor.execute(
+                    "SELECT id, option_text, is_correct FROM exam_options WHERE question_id = %s",
+                    (q_id,),
+                )
+                options = cursor.fetchall()
+
+                correct_opt = next((o for o in options if o["is_correct"]), None)
+                correct_answer = correct_opt["option_text"] if correct_opt else None
+
+                selected_opt = next((o for o in options if o["id"] == student_answer), None)
+                selected_option_id = student_answer
+                selected_text = selected_opt["option_text"] if selected_opt else None
+
+                is_correct = 1 if (selected_opt and selected_opt["is_correct"]) else 0
+                if is_correct:
+                    score += 1
+
+            # ----- Identification -----
+            elif q_type == "identification":
+                correct_answer = q.get("correct_answer")
+                selected_text = (student_answer or "").strip()
+
+                if correct_answer:
+                    is_correct = 1 if selected_text.lower() == correct_answer.lower() else 0
+                else:
+                    is_correct = 0
+
+                if is_correct:
+                    score += 1
+
+            # ----- Essay -----
+            elif q_type == "essay":
+                essay_answer = (student_answer or "").strip()
+                is_correct = None  # manual grading
+
+            # Insert into exam_answers
             cursor.execute("""
-                INSERT INTO exam_answers (submission_id, question_id, selected_option_id, is_correct)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO exam_answers
+                  (submission_id, question_id, selected_option_id, selected_text, essay_answer, is_correct)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
-                    selected_option_id = VALUES(selected_option_id),
-                    is_correct = VALUES(is_correct)
-            """, (submission_id, q_id, chosen_option, is_correct))
+                  selected_option_id = VALUES(selected_option_id),
+                  selected_text = VALUES(selected_text),
+                  essay_answer = VALUES(essay_answer),
+                  is_correct = VALUES(is_correct)
+            """, (submission_id, q_id, selected_option_id, selected_text, essay_answer, is_correct))
 
-        # Finalize submission
+            review.append({
+                "question_id": q_id,
+                "question_text": q["question_text"],
+                "question_type": q_type,
+                "selected_answer": essay_answer if q_type == "essay" else selected_text,
+                "correct_answer": correct_answer,
+                "is_correct": (None if is_correct is None else bool(is_correct)),
+            })
+
+        # Finalize submission score
         cursor.execute(
             "UPDATE exam_submissions SET score = %s, total_score = %s WHERE id = %s",
             (score, total_score, submission_id),
         )
-
-        # return per-question review so your modal can show it immediately
-        cursor.execute("""
-            SELECT 
-                q.id AS question_id,
-                q.question_text,
-                o.id AS selected_option_id,
-                o.option_text AS selected_answer,
-                ea.is_correct,
-                (SELECT option_text FROM exam_options WHERE question_id = q.id AND is_correct = 1) AS correct_answer
-            FROM exam_questions q
-            LEFT JOIN exam_answers ea
-                ON ea.question_id = q.id AND ea.submission_id = %s
-            LEFT JOIN exam_options o
-                ON o.id = ea.selected_option_id
-            WHERE q.exam_id = %s
-            ORDER BY q.id
-        """, (submission_id, exam_id))
-        review = cursor.fetchall()
 
         conn.commit()
         conn.close()
@@ -105,7 +135,6 @@ def submit_exam():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 # -----------------------------
 #  Get exam results with answers (for review)

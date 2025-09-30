@@ -500,7 +500,13 @@ const TakeExam = () => {
 
     setIsSubmitting(false);
     setIsTakingExam(false);
-  }, [isSubmitting, selectedExam, fetchBehaviorLogs, stopNoFaceAlarm, studentAnswers]);
+  }, [
+    isSubmitting,
+    selectedExam,
+    fetchBehaviorLogs,
+    stopNoFaceAlarm,
+    studentAnswers,
+  ]);
 
   // Auto-submit when time is up
   useEffect(() => {
@@ -659,34 +665,61 @@ const TakeExam = () => {
                             {idx + 1}. {q.question_text}
                           </h6>
 
-                          {/* Options */}
-                          <Form>
-                            {q.options.map((opt) => (
-                              <Form.Check
-                                key={opt.id}
-                                type="radio"
-                                id={`q-${q.id}-opt-${opt.id}`}
-                                name={`q-${q.id}`}
-                                label={opt.option_text}
-                                checked={studentAnswers[q.id] === opt.id}
-                                onChange={() =>
-                                  handleAnswerSelect(q.id, opt.id)
-                                }
-                                className="mb-2 p-2 border rounded hover-bg"
-                                style={{
-                                  backgroundColor:
-                                    studentAnswers[q.id] === opt.id
-                                      ? "#e6f0ff"
-                                      : "#fff",
-                                  borderColor:
-                                    studentAnswers[q.id] === opt.id
-                                      ? "#0d6efd"
-                                      : "#dee2e6",
-                                  cursor: "pointer",
-                                }}
-                              />
-                            ))}
-                          </Form>
+                          {/* Render by type */}
+                          {q.question_type === "mcq" && (
+                            <Form>
+                              {q.options.map((opt) => (
+                                <Form.Check
+                                  key={opt.id}
+                                  type="radio"
+                                  id={`q-${q.id}-opt-${opt.id}`}
+                                  name={`q-${q.id}`}
+                                  label={opt.option_text}
+                                  checked={studentAnswers[q.id] === opt.id}
+                                  onChange={() =>
+                                    handleAnswerSelect(q.id, opt.id)
+                                  }
+                                  className="mb-2 p-2 border rounded hover-bg"
+                                  style={{
+                                    backgroundColor:
+                                      studentAnswers[q.id] === opt.id
+                                        ? "#e6f0ff"
+                                        : "#fff",
+                                    borderColor:
+                                      studentAnswers[q.id] === opt.id
+                                        ? "#0d6efd"
+                                        : "#dee2e6",
+                                    cursor: "pointer",
+                                  }}
+                                />
+                              ))}
+                            </Form>
+                          )}
+
+                          {q.question_type === "identification" && (
+                            <Form.Control
+                              type="text"
+                              placeholder="Type your answer..."
+                              value={studentAnswers[q.id] || ""}
+                              onChange={(e) =>
+                                handleAnswerSelect(q.id, e.target.value)
+                              }
+                              className="p-2 border rounded"
+                            />
+                          )}
+
+                          {q.question_type === "essay" && (
+                            <Form.Control
+                              as="textarea"
+                              rows={4}
+                              placeholder="Write your essay answer here..."
+                              value={studentAnswers[q.id] || ""}
+                              onChange={(e) =>
+                                handleAnswerSelect(q.id, e.target.value)
+                              }
+                              className="p-2 border rounded"
+                            />
+                          )}
                         </Card.Body>
                       </Card>
                     ))}
@@ -824,33 +857,87 @@ const TakeExam = () => {
                   {examResult.score} / {examResult.total_score}
                 </span>
               </h5>
-
-              {/* ✅ Show answers review */}
+              {/*  Show answers review */}
               {examResult.answers && examResult.answers.length > 0 && (
                 <div className="mt-4">
                   {examResult.answers.map((ans, idx) => (
                     <Card key={idx} className="mb-3 shadow-sm">
                       <Card.Body>
+                        {/* Question */}
                         <h6>
                           {idx + 1}. {ans.question_text}
                         </h6>
-                        <p>
-                          <strong>Your Answer:</strong>{" "}
-                          <span
-                            className={
-                              ans.is_correct ? "text-success" : "text-danger"
-                            }
-                          >
-                            {ans.selected_answer}
-                          </span>
-                        </p>
-                        {!ans.is_correct && (
-                          <p>
-                            <strong>Correct Answer:</strong>{" "}
-                            <span className="text-success">
-                              {ans.correct_answer}
-                            </span>
-                          </p>
+
+                        {/* MCQ */}
+                        {ans.question_type === "mcq" && (
+                          <>
+                            <p>
+                              <strong>Your Answer:</strong>{" "}
+                              <span
+                                className={
+                                  ans.is_correct
+                                    ? "text-success"
+                                    : "text-danger"
+                                }
+                              >
+                                {ans.selected_answer || "—"}
+                              </span>
+                            </p>
+                            {!ans.is_correct && ans.correct_answer && (
+                              <p>
+                                <strong>Correct Answer:</strong>{" "}
+                                <span className="text-success">
+                                  {ans.correct_answer}
+                                </span>
+                              </p>
+                            )}
+                          </>
+                        )}
+
+                        {/* Identification */}
+                        {ans.question_type === "identification" && (
+                          <>
+                            <p>
+                              <strong>Your Answer:</strong>{" "}
+                              <span
+                                className={
+                                  ans.is_correct
+                                    ? "text-success"
+                                    : "text-danger"
+                                }
+                              >
+                                {ans.selected_answer || "—"}
+                              </span>
+                            </p>
+                            {!ans.is_correct && ans.correct_answer && (
+                              <p>
+                                <strong>Correct Answer:</strong>{" "}
+                                <span className="text-success">
+                                  {ans.correct_answer}
+                                </span>
+                              </p>
+                            )}
+                          </>
+                        )}
+
+                        {/* Essay */}
+                        {ans.question_type === "essay" && (
+                          <>
+                            <p>
+                              <strong>Your Answer:</strong>
+                            </p>
+                            <div className="p-2 border rounded bg-light">
+                              {ans.selected_answer || (
+                                <em className="text-muted">
+                                  No answer provided.
+                                </em>
+                              )}
+                            </div>
+                            <p className="mt-2 text-muted small">
+                              <i className="bi bi-info-circle me-1"></i> Essay
+                              answers are graded manually.
+                            </p>
+                          </>
                         )}
                       </Card.Body>
                     </Card>

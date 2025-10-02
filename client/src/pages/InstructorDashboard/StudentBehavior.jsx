@@ -33,6 +33,9 @@ const StudentBehavior = () => {
   const [showCurrentExamModal, setShowCurrentExamModal] = useState(false);
   const [showPastExamModal, setShowPastExamModal] = useState(false);
   const [showBehaviorModal, setShowBehaviorModal] = useState(false);
+  // exam result
+  const [reviewData, setReviewData] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   const instructorId = JSON.parse(localStorage.getItem("userData"))?.id;
 
@@ -269,6 +272,20 @@ const StudentBehavior = () => {
     })}`;
   };
 
+  const handleStudentReviewClick = async (student) => {
+    setSelectedStudent(student);
+    const studentId = student.student_id || student.id;
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/api/exam-review?exam_id=${selectedExam.id}&user_id=${studentId}`
+      );
+      setReviewData(res.data);
+      setShowReviewModal(true);
+    } catch {
+      toast.error("Failed to load exam review");
+    }
+  };
+
   return (
     <Container className="py-4">
       <ToastContainer />
@@ -453,6 +470,7 @@ const StudentBehavior = () => {
                   <th>Username</th>
                   <th>Status</th>
                   <th>Action</th>
+                  <th>Exam Result</th>
                 </tr>
               </thead>
               <tbody>
@@ -476,6 +494,15 @@ const StudentBehavior = () => {
                         onClick={() => handleStudentClick(student)}
                       >
                         <i className="bi bi-eye me-1"></i> View
+                      </Button>
+                    </td>
+                    <td>
+                      <Button
+                        variant="outline-success"
+                        size="sm"
+                        onClick={() => handleStudentReviewClick(student)}
+                      >
+                        <i className="bi bi-file-earmark-text me-1"></i> Review
                       </Button>
                     </td>
                   </tr>
@@ -545,6 +572,67 @@ const StudentBehavior = () => {
               <BsCheckCircle className="me-2 text-success" />
               No suspicious behavior detected by the AI model.
             </div>
+          )}
+        </Modal.Body>
+      </Modal>
+      {/*Exam result modal*/}
+      <Modal
+        show={showReviewModal}
+        onHide={() => setShowReviewModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton className="bg-primary text-white">
+          <Modal.Title>
+            <i className="bi bi-file-earmark-text me-2"></i>
+            Exam Review – {selectedStudent?.name}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {reviewData ? (
+            <>
+              <h5 className="fw-bold text-center mb-3">
+                Score:{" "}
+                <span className="text-success">
+                  {reviewData.score} / {reviewData.total_score}
+                </span>
+              </h5>
+
+              <Table striped bordered hover>
+                <thead className="table-light">
+                  <tr>
+                    <th>#</th>
+                    <th>Question</th>
+                    <th>Answer</th>
+                    <th>Correct Answer</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reviewData.answers.map((ans, idx) => (
+                    <tr key={idx}>
+                      <td>{idx + 1}</td>
+                      <td>{ans.question_text}</td>
+                      <td>{ans.selected_answer || "-"}</td>
+                      <td>{ans.correct_answer || "-"}</td>
+                      <td>
+                        {ans.is_correct === null ? (
+                          <span className="badge bg-warning text-dark">
+                            Pending
+                          </span>
+                        ) : ans.is_correct ? (
+                          <span className="badge bg-success">Correct</span>
+                        ) : (
+                          <span className="badge bg-danger">Wrong</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </>
+          ) : (
+            <p className="text-muted text-center">No review data available.</p>
           )}
         </Modal.Body>
       </Modal>

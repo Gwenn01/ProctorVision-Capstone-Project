@@ -924,124 +924,133 @@ const TakeExam = () => {
       </Modal>
 
       {/* Exam Result Modal */}
-      {examResult && selectedExam?.exam_type !== "Coding" ? (
-        <Modal
-          show={showResultModal}
-          onHide={() => setShowResultModal(false)}
-          size="lg"
-          centered
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>
-              <i className="bi bi-check-circle me-2"></i> Exam Result
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <h5 className="mb-3 text-center">
-              Score:{" "}
-              <span className="text-success">
-                {examResult.score} / {examResult.total_score}
-              </span>
-            </h5>
+      {/* Exam Result Modal */}
+      <Modal
+        show={showResultModal}
+        onHide={() => setShowResultModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <i className="bi bi-check-circle me-2"></i> Exam Result
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {/* If coding exam */}
+          {selectedExam?.exam_type === "Coding" ? (
+            <p className="text-muted text-center">
+              This is a <strong>coding exam</strong>. Automatic results are not
+              available. Please wait for instructor grading.
+            </p>
+          ) : examResult ? (
+            <>
+              <h5 className="mb-3 text-center">
+                Score:{" "}
+                <span className="text-success">
+                  {examResult.score} / {examResult.total_score}
+                </span>
+              </h5>
 
-            {/* Show answers review */}
-            {examResult.answers && examResult.answers.length > 0 ? (
-              <div className="mt-4">
-                {examResult.answers.map((ans, idx) => (
-                  <Card key={idx} className="mb-3 shadow-sm">
-                    <Card.Body>
-                      {/* Question */}
-                      <h6>
-                        {idx + 1}. {ans.question_text}
-                      </h6>
+              {/* Show answers review */}
+              {examResult.answers && examResult.answers.length > 0 ? (
+                <div className="mt-4">
+                  {examResult.answers.map((ans, idx) => (
+                    <Card key={idx} className="mb-3 shadow-sm">
+                      <Card.Body>
+                        <h6>
+                          {idx + 1}. {ans.question_text}
+                        </h6>
 
-                      {/* MCQ */}
-                      {ans.question_type === "mcq" && (
-                        <>
-                          <p>
-                            <strong>Your Answer:</strong>{" "}
-                            <span
-                              className={
-                                ans.is_correct ? "text-success" : "text-danger"
-                              }
-                            >
-                              {ans.selected_answer || "—"}
-                            </span>
-                          </p>
-                          {!ans.is_correct && ans.correct_answer && (
+                        {/* MCQ */}
+                        {ans.question_type === "mcq" && (
+                          <>
                             <p>
-                              <strong>Correct Answer:</strong>{" "}
-                              <span className="text-success">
-                                {ans.correct_answer}
+                              <strong>Your Answer:</strong>{" "}
+                              <span
+                                className={
+                                  ans.is_correct
+                                    ? "text-success"
+                                    : "text-danger"
+                                }
+                              >
+                                {ans.selected_answer || "—"}
                               </span>
                             </p>
-                          )}
-                        </>
-                      )}
-
-                      {/* Identification */}
-                      {ans.question_type === "identification" && (
-                        <>
-                          <p>
-                            <strong>Your Answer:</strong>{" "}
-                            <span
-                              className={
-                                ans.is_correct ? "text-success" : "text-danger"
-                              }
-                            >
-                              {ans.selected_answer || "—"}
-                            </span>
-                          </p>
-                          {!ans.is_correct && ans.correct_answer && (
-                            <p>
-                              <strong>Correct Answer:</strong>{" "}
-                              <span className="text-success">
-                                {ans.correct_answer}
-                              </span>
-                            </p>
-                          )}
-                        </>
-                      )}
-
-                      {/* Essay */}
-                      {ans.question_type === "essay" && (
-                        <>
-                          <p>
-                            <strong>Your Answer:</strong>
-                          </p>
-                          <div className="p-2 border rounded bg-light">
-                            {ans.selected_answer || (
-                              <em className="text-muted">
-                                No answer provided.
-                              </em>
+                            {!ans.is_correct && ans.correct_answer && (
+                              <p>
+                                <strong>Correct Answer:</strong>{" "}
+                                <span className="text-success">
+                                  {ans.correct_answer}
+                                </span>
+                              </p>
                             )}
-                          </div>
-                          <p className="mt-2 text-muted small">
-                            <i className="bi bi-info-circle me-1"></i> Essay
-                            answers are graded manually.
-                          </p>
-                        </>
-                      )}
-                    </Card.Body>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted text-center">No answers available.</p>
-            )}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button
-              variant="secondary"
-              onClick={() => setShowResultModal(false)}
-            >
-              Close
-            </Button>
-          </Modal.Footer>
-        </Modal>
-      ) : (
-        <p className="text-muted">No result available.</p>
-      )}
+                          </>
+                        )}
+
+                        {/* Identification */}
+                        {ans.question_type === "identification" && (
+                          <>
+                            <p>
+                              <strong>Your Answer:</strong>{" "}
+                              <span
+                                className={
+                                  ans.is_correct
+                                    ? "text-success"
+                                    : "text-danger"
+                                }
+                              >
+                                {ans.selected_answer || "—"}
+                              </span>
+                            </p>
+                            {!ans.is_correct && ans.correct_answer && (
+                              <p>
+                                <strong>Correct Answer:</strong>{" "}
+                                <span className="text-success">
+                                  {ans.correct_answer}
+                                </span>
+                              </p>
+                            )}
+                          </>
+                        )}
+
+                        {/* Essay */}
+                        {ans.question_type === "essay" && (
+                          <>
+                            <p>
+                              <strong>Your Answer:</strong>
+                            </p>
+                            <div className="p-2 border rounded bg-light">
+                              {ans.selected_answer || (
+                                <em className="text-muted">
+                                  No answer provided.
+                                </em>
+                              )}
+                            </div>
+                            <p className="mt-2 text-muted small">
+                              <i className="bi bi-info-circle me-1"></i>
+                              Essay answers are graded manually.
+                            </p>
+                          </>
+                        )}
+                      </Card.Body>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted text-center">No answers available.</p>
+              )}
+            </>
+          ) : (
+            <p className="text-muted text-center">No result available.</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowResultModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Container>
   );
 };

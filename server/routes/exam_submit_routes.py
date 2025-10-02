@@ -166,64 +166,8 @@ def submit_exam():
 
 
 # -----------------------------
-#  Get exam results with answers (for review)
+#  exam submision to make a condition for take exam 
 # -----------------------------
-@exam_submit_bp.route("/get_exam_result", methods=["GET"])
-def get_exam_result():
-    user_id = request.args.get("user_id")
-    exam_id = request.args.get("exam_id")
-
-    if not user_id or not exam_id:
-        return jsonify({"error": "Missing usser_id or exam_id"}), 400
-
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        # Fetch exam submission summary
-        cursor.execute("""
-            SELECT id AS submission_id, score, total_score, submitted_at
-            FROM exam_submissions
-            WHERE user_id = %s AND exam_id = %s
-            LIMIT 1
-        """, (user_id, exam_id))
-        submission = cursor.fetchone()
-
-        if not submission:
-            return jsonify({"error": "No submission found"}), 404
-
-        submission_id = submission["submission_id"]
-
-        # Fetch answers with question + selected option + correctness
-        cursor.execute("""
-            SELECT 
-                q.id AS question_id,
-                q.question_text,
-                o.id AS selected_option_id,
-                o.option_text AS selected_answer,
-                ea.is_correct,
-                (SELECT option_text FROM exam_options WHERE question_id = q.id AND is_correct = 1) AS correct_answer
-            FROM exam_answers ea
-            JOIN exam_questions q ON ea.question_id = q.id
-            JOIN exam_options o ON ea.selected_option_id = o.id
-            WHERE ea.submission_id = %s
-        """, (submission_id,))
-        answers = cursor.fetchall()
-
-        conn.close()
-
-        return jsonify({
-            "exam_id": exam_id,
-            "score": submission["score"],
-            "total_score": submission["total_score"],
-            "submitted_at": submission["submitted_at"],
-            "answers": answers
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @exam_submit_bp.route("/get_exam_submissions", methods=["GET"])
 def get_exam_submissions():
     user_id = request.args.get("user_id")
@@ -244,6 +188,107 @@ def get_exam_submissions():
         conn.close()
 
         return jsonify(rows), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
+# -----------------------------
+#  Get exam results with answers (for review)
+# -----------------------------
+@exam_submit_bp.route("/exam-review", methods=["GET"])
+def exam_review():
+    user_id = request.args.get("user_id")
+    exam_id = request.args.get("exam_id")
+
+    if not user_id or not exam_id:
+        return jsonify({"error": "Missing user_id or exam_id"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Fetch exam submission summary
+        cursor.execute("""
+            SELECT id AS submission_id, score, total_score, submitted_at
+            FROM exam_submissions
+            WHERE user_id = %s AND exam_id = %s
+            LIMIT 1
+        """, (user_id, exam_id))
+        submission = cursor.fetchone()
+
+        if not submission:
+            return jsonify({"error": "No submission found"}), 404
+
+        submission_id = submission["submission_id"]
+
+        # Fetch answers with full question info
+        cursor.execute("""
+            SELECT 
+                q.id AS question_id,
+                q.question_text,
+                q.question_type,
+                ea.selected_option_id,
+                ea.selected_text,
+                ea.essay_answer,
+                ea.is_correct,
+                q.correct_answer
+            FROM exam_answers ea
+            JOIN exam_questions q ON ea.question_id = q.id
+            WHERE ea.submission_id = %s
+        """, (submission_id,))
+        answers = cursor.fetchall()
+
+        # Normalize data so frontend can easily display
+        formatted_answers = []
+        for ans in answers:
+            selected_answer = None
+            correct_answer = ans.get("correct_answer")
+
+            if ans["question_type"] == "mcq":
+                # For MCQ, fetch selected option text
+                if ans["selected_option_id"]:
+                    cursor.execute(
+                        "SELECT option_text FROM exam_options WHERE id = %s",
+                        (ans["selected_option_id"],)
+                    )
+                    row = cursor.fetchone()
+                    selected_answer = row["option_text"] if row else None
+
+                # Fetch correct answer text
+                cursor.execute(
+                    "SELECT option_text FROM exam_options WHERE question_id = %s AND is_correct = 1",
+                    (ans["question_id"],)
+                )
+                row = cursor.fetchone()
+                correct_answer = row["option_text"] if row else None
+
+            elif ans["question_type"] == "identification":
+                selected_answer = ans["selected_text"]
+
+            elif ans["question_type"] == "essay":
+                selected_answer = ans["essay_answer"]
+
+            formatted_answers.append({
+                "question_id": ans["question_id"],
+                "question_text": ans["question_text"],
+                "question_type": ans["question_type"],
+                "selected_answer": selected_answer,
+                "correct_answer": correct_answer,
+                "is_correct": (
+                    None if ans["is_correct"] is None else bool(ans["is_correct"])
+                ),
+            })
+
+        conn.close()
+
+        return jsonify({
+            "exam_id": exam_id,
+            "score": submission["score"],
+            "total_score": submission["total_score"],
+            "submitted_at": submission["submitted_at"],
+            "answers": formatted_answers
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

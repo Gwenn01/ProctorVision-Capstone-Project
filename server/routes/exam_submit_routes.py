@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify
 from database.connection import get_db_connection
 from datetime import datetime
+import traceback
 
 exam_submit_bp = Blueprint("exam_submit_bp", __name__)
 
@@ -14,11 +15,14 @@ def submit_exam():
     user_id = data.get("user_id")
     exam_id = data.get("exam_id")
     answers = data.get("answers") or {}
+    language = data.get("language")        # for coding exam
+    code = data.get("code")                # student's source code
+    output = data.get("output") or ""      # last console output
 
     if not user_id or not exam_id:
         return jsonify({"error": "Missing user_id or exam_id"}), 400
-    if not isinstance(answers, dict):
-        return jsonify({"error": "answers must be {question_id: answer}"}), 400
+    if not isinstance(answers, dict) and not code:
+        return jsonify({"error": "Invalid request body"}), 400
 
     try:
         conn = get_db_connection()
@@ -34,8 +38,14 @@ def submit_exam():
         exam_category = exam.get("exam_category")  # QA or CODING
         now = datetime.now()
 
-        # Handle CODING exams (no auto-grading, just record submission)
+        # -------------------------------------------------------------------
+        # 🧩 Handle CODING Exams
+        # -------------------------------------------------------------------
         if exam_category and exam_category.upper() == "CODING":
+            if not code or not language:
+                return jsonify({"error": "Missing code or language"}), 400
+
+            # Insert a submission entry in exam_submissions table
             cursor.execute("""
                 INSERT INTO exam_submissions (user_id, exam_id, score, total_score, submitted_at)
                 VALUES (%s, %s, %s, %s, %s)
@@ -43,18 +53,30 @@ def submit_exam():
                     submitted_at = VALUES(submitted_at),
                     id = LAST_INSERT_ID(id)
             """, (user_id, exam_id, 0, 0, now))
-            submission_id = cursor.lastrowid
+
+            # Save code submission details (✅ uses student_id)
+            cursor.execute("""
+                INSERT INTO coding_submissions (student_id, exam_id, language, code, output, submitted_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    code = VALUES(code),
+                    output = VALUES(output),
+                    submitted_at = VALUES(submitted_at)
+            """, (user_id, exam_id, language, code, output, now))
 
             conn.commit()
             conn.close()
 
             return jsonify({
-                "message": "Coding exam submitted successfully",
+                "message": "✅ Coding exam submitted successfully",
                 "exam_id": exam_id,
+                "language": language,
                 "category": "CODING"
             }), 200
 
-        # Handle QA exams
+        # -------------------------------------------------------------------
+        # 🧩 Handle QA Exams (unchanged)
+        # -------------------------------------------------------------------
         cursor.execute("SELECT * FROM exam_questions WHERE exam_id = %s", (exam_id,))
         questions = cursor.fetchall()
 
@@ -63,7 +85,6 @@ def submit_exam():
             conn.close()
             return jsonify({"error": "No questions found"}), 400
 
-        # Insert submission record
         cursor.execute("""
             INSERT INTO exam_submissions (user_id, exam_id, score, total_score, submitted_at)
             VALUES (%s, %s, 0, %s, %s)
@@ -110,12 +131,7 @@ def submit_exam():
             elif q_type == "identification":
                 correct_answer = q.get("correct_answer")
                 selected_text = (student_answer or "").strip()
-
-                if correct_answer:
-                    is_correct = 1 if selected_text.lower() == correct_answer.lower() else 0
-                else:
-                    is_correct = 0
-
+                is_correct = 1 if correct_answer and selected_text.lower() == correct_answer.lower() else 0
                 if is_correct:
                     score += 1
 
@@ -124,7 +140,7 @@ def submit_exam():
                 essay_answer = (student_answer or "").strip()
                 is_correct = None  # manual grading
 
-            # Insert into exam_answers
+            # Save to exam_answers
             cursor.execute("""
                 INSERT INTO exam_answers
                   (submission_id, question_id, selected_option_id, selected_text, essay_answer, is_correct)
@@ -163,6 +179,8 @@ def submit_exam():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
 
 
 # -----------------------------

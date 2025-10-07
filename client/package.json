@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
+    "@monaco-editor/react": "^4.7.0",
     "axios": "^1.8.3",
     "bootstrap": "^5.3.3",
     "cra-template": "1.2.0",

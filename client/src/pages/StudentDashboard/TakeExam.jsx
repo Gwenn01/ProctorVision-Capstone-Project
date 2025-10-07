@@ -13,7 +13,7 @@ import {
 import { toast } from "react-toastify";
 //import Spinner from "../../components/Spinner";
 import axios from "axios";
-
+import Editor from "@monaco-editor/react";
 import {
   startProctoringWebRTC,
   stopProctoringWebRTC,
@@ -51,6 +51,11 @@ const TakeExam = () => {
   // handle question and answer
   const [questions, setQuestions] = useState([]);
   const [studentAnswers, setStudentAnswers] = useState({});
+  // handle coding exam
+  const [language, setLanguage] = useState("python");
+  const [code, setCode] = useState("");
+  const [output, setOutput] = useState("");
+  const [isRunning, setIsRunning] = useState(false);
 
   const [examResult, setExamResult] = useState(null); // store exam score & answers
   const [showResultModal, setShowResultModal] = useState(false); // control modal
@@ -193,7 +198,7 @@ const TakeExam = () => {
       .get(`${API_BASE}/api/exam_instructions/${selectedExam.id}`)
       .then((res) => {
         if (res.data && res.data.instructions) {
-          // ✅ Found instructions in DB
+          //  Found instructions in DB
           setExamText(res.data.instructions);
         } else if (selectedExam.exam_file) {
           // ⬇️ Fallback to file if DB empty
@@ -475,6 +480,7 @@ const TakeExam = () => {
     setIsSubmitting(true);
 
     try {
+      //  Update exam status first (for both types)
       await axios.post(
         `${API_BASE}/api/update_exam_status_submit`,
         { student_id: studentId },
@@ -494,30 +500,44 @@ const TakeExam = () => {
         exam_id: selectedExam.id,
       });
 
-      console.log("Submitting exam with payload:", {
-        user_id: studentId,
-        exam_id: selectedExam?.id,
-        answers: studentAnswers,
-      });
+      //  Detect if it's a coding exam
+      if (selectedExam.exam_category?.toLowerCase() === "coding") {
+        // Submit coding exam to backend
+        const { data } = await axios.post(`${API_BASE}/api/submit_exam`, {
+          user_id: studentId,
+          exam_id: selectedExam.id,
+          language,
+          code,
+          output, // last run result
+        });
 
-      // Capture backend response for result
-      const { data } = await axios.post(`${API_BASE}/api/submit_exam`, {
-        user_id: studentId,
-        exam_id: selectedExam.id,
-        answers: studentAnswers,
-      });
+        // Show both results and behavior logs
+        setExamResult(data);
+        setShowResultModal(true);
 
-      // Store result from backend (score + total_score)
-      setExamResult(data);
-      setShowResultModal(true);
+        await fetchBehaviorLogs();
 
-      await fetchBehaviorLogs();
+        toast.success(" Coding exam submitted and classified successfully!");
+        setShowCapturedModal(true);
+      } else {
+        // Normal Q&A exam submission
+        const { data } = await axios.post(`${API_BASE}/api/submit_exam`, {
+          user_id: studentId,
+          exam_id: selectedExam.id,
+          answers: studentAnswers,
+        });
 
-      toast.success("Exam submitted and classified.");
-      setShowCapturedModal(true);
+        // Show result for normal exams
+        setExamResult(data);
+        setShowResultModal(true);
+
+        await fetchBehaviorLogs();
+
+        toast.success("QA exam submitted and classified successfully!");
+        setShowCapturedModal(true);
+      }
     } catch (error) {
-      console.error("Error during submission:", error);
-      toast.error("Something went wrong while submitting the exam.");
+      toast.error(" Something went wrong while submitting the exam.");
     }
 
     setIsSubmitting(false);
@@ -528,6 +548,9 @@ const TakeExam = () => {
     fetchBehaviorLogs,
     stopNoFaceAlarm,
     studentAnswers,
+    code,
+    language,
+    output,
   ]);
 
   // Auto-submit when time is up
@@ -544,6 +567,35 @@ const TakeExam = () => {
       stopNoFaceAlarm();
     };
   }, [stopNoFaceAlarm]);
+
+  const runCode = async () => {
+    try {
+      setIsRunning(true);
+      setOutput("Running your code...");
+
+      //  Axios POST request
+      const res = await axios.post(`${API_BASE}/api/run_code`, {
+        code,
+        language,
+      });
+
+      // Axios automatically parses JSON
+      const data = res.data;
+
+      if (res.status !== 200) {
+        setOutput(data.output || ` Error: ${data.error || "Unknown error"}`);
+      } else {
+        setOutput(data.output || " No output received");
+      }
+    } catch (err) {
+      console.error("Run code error:", err);
+      const msg =
+        err.response?.data?.error || err.message || "Unexpected server error.";
+      setOutput(`⚠️ Server error: ${msg}`);
+    } finally {
+      setIsRunning(false);
+    }
+  };
 
   return (
     <Container fluid className="py-4 px-3 px-md-5 bg-light min-vh-100">
@@ -671,7 +723,7 @@ const TakeExam = () => {
                 </div>
 
                 {/* Coding Exam Instructions */}
-                {selectedExam?.exam_type === "Coding" ? (
+                {selectedExam?.exam_category?.toLowerCase() === "coding" ? (
                   <Card className="shadow-sm border-0 mb-4">
                     <Card.Header className="bg-dark text-white">
                       <i className="bi bi-code-slash me-2"></i> Coding Exam
@@ -685,18 +737,100 @@ const TakeExam = () => {
                           </h5>
                           <div
                             className="text-start mx-auto"
-                            style={{
-                              maxWidth: "750px",
-                              lineHeight: "1.3",
-                              fontSize: "1.5rem",
-                              color: "#333",
-                            }}
+                            style={{ maxWidth: "750px" }}
                           >
                             {examText.split("\n").map((line, idx) => (
                               <p key={idx} className="mb-2">
                                 {line}
                               </p>
                             ))}
+                          </div>
+
+                          {/*  Coding Section */}
+                          <div className="mt-4">
+                            <Form.Select
+                              value={language}
+                              onChange={(e) => setLanguage(e.target.value)}
+                              className="mb-3 shadow-sm"
+                            >
+                              <option value="python">Python</option>
+                              <option value="cpp">C++</option>
+                              <option value="java">Java</option>
+                              <option value="javascript">JavaScript</option>
+                              <option value="php">PHP</option>
+                            </Form.Select>
+
+                            <Editor
+                              height="400px"
+                              language={language}
+                              theme="vs-dark"
+                              value={code}
+                              onChange={(value) => setCode(value)}
+                            />
+
+                            {/* 🟦 Run Button */}
+                            <Button
+                              variant={isRunning ? "secondary" : "primary"}
+                              onClick={runCode}
+                              disabled={isRunning}
+                              className="mt-3 px-4 fw-semibold d-flex align-items-center mx-auto"
+                            >
+                              {isRunning ? (
+                                <>
+                                  <span
+                                    className="spinner-border spinner-border-sm me-2"
+                                    role="status"
+                                    aria-hidden="true"
+                                  ></span>
+                                  Running...
+                                </>
+                              ) : (
+                                <>
+                                  <i className="bi bi-play-circle me-2"></i> Run
+                                  Code
+                                </>
+                              )}
+                            </Button>
+
+                            {/* Output Section */}
+                            <div className="mt-4 p-3 rounded shadow-sm border bg-white">
+                              <h6 className="fw-bold mb-2">
+                                <i className="bi bi-terminal me-2 text-primary"></i>{" "}
+                                Output
+                              </h6>
+
+                              <div
+                                className="p-3 rounded bg-light border"
+                                style={{
+                                  minHeight: "120px",
+                                  whiteSpace: "pre-wrap",
+                                  fontFamily: "monospace",
+                                }}
+                              >
+                                {isRunning ? (
+                                  <div className="text-center text-secondary">
+                                    <div
+                                      className="spinner-border text-primary mb-2"
+                                      style={{ width: "2rem", height: "2rem" }}
+                                      role="status"
+                                    ></div>
+                                    <p className="mb-0 fw-semibold">
+                                      Running your code...
+                                    </p>
+                                    <small className="text-muted">
+                                      Please wait a moment ⏳
+                                    </small>
+                                  </div>
+                                ) : output ? (
+                                  <pre className="m-0">{output}</pre>
+                                ) : (
+                                  <p className="text-muted text-center m-0 fst-italic">
+                                    No output yet. Click "Run Code" to execute
+                                    your program.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -924,7 +1058,6 @@ const TakeExam = () => {
       </Modal>
 
       {/* Exam Result Modal */}
-      {/* Exam Result Modal */}
       <Modal
         show={showResultModal}
         onHide={() => setShowResultModal(false)}
@@ -938,49 +1071,69 @@ const TakeExam = () => {
         </Modal.Header>
         <Modal.Body>
           {/* If coding exam */}
-          {selectedExam?.exam_type === "Coding" ? (
-            <p className="text-muted text-center">
-              This is a <strong>coding exam</strong>. Automatic results are not
-              available. Please wait for instructor grading.
-            </p>
-          ) : examResult ? (
+          {selectedExam?.exam_category?.toLowerCase() === "coding" ? (
             <>
+              <p className="text-muted text-center">
+                This is a <strong>coding exam</strong>. Automatic scoring is not
+                available.
+              </p>
+              {examResult?.language && (
+                <p>
+                  <strong>Language:</strong> {examResult.language}
+                </p>
+              )}
+              {code && (
+                <>
+                  <h6>Your Submitted Code:</h6>
+                  <pre className="bg-dark text-light p-3 rounded">{code}</pre>
+                </>
+              )}
+              {output && (
+                <>
+                  <h6>Program Output:</h6>
+                  <pre className="bg-light border p-3 rounded">{output}</pre>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {/* ✅ Show score safely */}
               <h5 className="mb-3 text-center">
                 Score:{" "}
                 <span className="text-success">
-                  {examResult.score} / {examResult.total_score}
+                  {examResult?.score ?? 0} / {examResult?.total_score ?? 0}
                 </span>
               </h5>
 
-              {/* Show answers review */}
-              {examResult.answers && examResult.answers.length > 0 ? (
+              {/* ✅ Show answers review safely */}
+              {examResult?.answers && examResult.answers.length > 0 ? (
                 <div className="mt-4">
                   {examResult.answers.map((ans, idx) => (
-                    <Card key={idx} className="mb-3 shadow-sm">
+                    <Card key={idx} className="mb-3 shadow-sm border-0">
                       <Card.Body>
-                        <h6>
-                          {idx + 1}. {ans.question_text}
+                        <h6 className="fw-semibold mb-2">
+                          {idx + 1}. {ans.question_text || "Untitled Question"}
                         </h6>
 
-                        {/* MCQ */}
+                        {/* 🟩 Multiple Choice */}
                         {ans.question_type === "mcq" && (
                           <>
-                            <p>
+                            <p className="mb-1">
                               <strong>Your Answer:</strong>{" "}
                               <span
                                 className={
                                   ans.is_correct
-                                    ? "text-success"
-                                    : "text-danger"
+                                    ? "text-success fw-semibold"
+                                    : "text-danger fw-semibold"
                                 }
                               >
                                 {ans.selected_answer || "—"}
                               </span>
                             </p>
                             {!ans.is_correct && ans.correct_answer && (
-                              <p>
+                              <p className="mb-0">
                                 <strong>Correct Answer:</strong>{" "}
-                                <span className="text-success">
+                                <span className="text-success fw-semibold">
                                   {ans.correct_answer}
                                 </span>
                               </p>
@@ -988,25 +1141,25 @@ const TakeExam = () => {
                           </>
                         )}
 
-                        {/* Identification */}
+                        {/* 🟨 Identification */}
                         {ans.question_type === "identification" && (
                           <>
-                            <p>
+                            <p className="mb-1">
                               <strong>Your Answer:</strong>{" "}
                               <span
                                 className={
                                   ans.is_correct
-                                    ? "text-success"
-                                    : "text-danger"
+                                    ? "text-success fw-semibold"
+                                    : "text-danger fw-semibold"
                                 }
                               >
                                 {ans.selected_answer || "—"}
                               </span>
                             </p>
                             {!ans.is_correct && ans.correct_answer && (
-                              <p>
+                              <p className="mb-0">
                                 <strong>Correct Answer:</strong>{" "}
-                                <span className="text-success">
+                                <span className="text-success fw-semibold">
                                   {ans.correct_answer}
                                 </span>
                               </p>
@@ -1014,14 +1167,14 @@ const TakeExam = () => {
                           </>
                         )}
 
-                        {/* Essay */}
+                        {/* 🟦 Essay */}
                         {ans.question_type === "essay" && (
                           <>
-                            <p>
-                              <strong>Your Answer:</strong>
-                            </p>
+                            <p className="mb-1 fw-semibold">Your Answer:</p>
                             <div className="p-2 border rounded bg-light">
-                              {ans.selected_answer || (
+                              {ans.selected_answer ? (
+                                ans.selected_answer
+                              ) : (
                                 <em className="text-muted">
                                   No answer provided.
                                 </em>
@@ -1038,11 +1191,11 @@ const TakeExam = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-muted text-center">No answers available.</p>
+                <p className="text-muted text-center fst-italic">
+                  No answers available yet.
+                </p>
               )}
             </>
-          ) : (
-            <p className="text-muted text-center">No result available.</p>
           )}
         </Modal.Body>
         <Modal.Footer>

@@ -16,11 +16,13 @@ def get_exam():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         query = """
-            SELECT e.id, e.title, e.description, e.duration_minutes, e.exam_date, e.start_time, e.exam_file
-            FROM exams e
-            JOIN exam_students es ON e.id = es.exam_id
-            WHERE es.student_id = %s
-        """
+                    SELECT e.id, e.title, e.description, e.duration_minutes, e.exam_date,
+                        e.start_time, e.exam_file, e.exam_type, e.exam_category
+                    FROM exams e
+                    JOIN exam_students es ON e.id = es.exam_id
+                    WHERE es.student_id = %s
+                """
+
         cursor.execute(query, (student_id,))
         exams = cursor.fetchall()
 

@@ -23,6 +23,8 @@ import {
 import "react-toastify/dist/ReactToastify.css";
 import "./../../styles/indicatior.css";
 
+const API_BASE = "http://localhost:5000/api";
+
 const StudentBehavior = () => {
   const [exams, setExams] = useState([]);
   const [selectedExam, setSelectedExam] = useState(null);
@@ -273,16 +275,35 @@ const StudentBehavior = () => {
   };
 
   const handleStudentReviewClick = async (student) => {
+    setReviewData(null);
     setSelectedStudent(student);
     const studentId = student.student_id || student.id;
+
+    if (!selectedExam) return toast.error("No exam selected.");
+
     try {
-      const res = await axios.get(
-        `http://localhost:5000/api/exam-review?exam_id=${selectedExam.id}&user_id=${studentId}`
-      );
-      setReviewData(res.data);
-      setShowReviewModal(true);
-    } catch {
-      toast.error("Failed to load exam review");
+      let res;
+
+      // 🔍 Check if this is a coding exam
+      if (selectedExam.exam_category?.toLowerCase() === "coding") {
+        res = await axios.get(
+          `${API_BASE}/coding_submission/${selectedExam.id}/${studentId}`
+        );
+      } else {
+        res = await axios.get(
+          `${API_BASE}/exam-review?exam_id=${selectedExam.id}&user_id=${studentId}`
+        );
+      }
+
+      if (res.data) {
+        setReviewData(res.data);
+        setShowReviewModal(true);
+      } else {
+        toast.warning("No submission found for this student.");
+      }
+    } catch (err) {
+      console.error("Error fetching review:", err);
+      toast.error("Failed to load exam review.");
     }
   };
 
@@ -575,7 +596,8 @@ const StudentBehavior = () => {
           )}
         </Modal.Body>
       </Modal>
-      {/*Exam result modal*/}
+
+      {/* 🧾 Exam Review Modal */}
       <Modal
         show={showReviewModal}
         onHide={() => setShowReviewModal(false)}
@@ -588,48 +610,124 @@ const StudentBehavior = () => {
             Exam Review – {selectedStudent?.name}
           </Modal.Title>
         </Modal.Header>
+
         <Modal.Body>
           {reviewData ? (
             <>
-              <h5 className="fw-bold text-center mb-3">
-                Score:{" "}
-                <span className="text-success">
-                  {reviewData.score} / {reviewData.total_score}
-                </span>
-              </h5>
+              {!reviewData && (
+                <div className="text-center py-3">
+                  <Spinner animation="border" variant="primary" />
+                  <p className="mt-2 text-muted">Loading exam data...</p>
+                </div>
+              )}
+              {/*  Detect QA vs Coding */}
+              {selectedExam.exam_category?.toLowerCase() === "coding" ? (
+                <>
+                  {/*  CODING EXAM RESULT */}
+                  <h5 className="fw-bold text-center mb-4 text-primary">
+                    Coding Exam Submission
+                  </h5>
 
-              <Table striped bordered hover>
-                <thead className="table-light">
-                  <tr>
-                    <th>#</th>
-                    <th>Question</th>
-                    <th>Answer</th>
-                    <th>Correct Answer</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reviewData.answers.map((ans, idx) => (
-                    <tr key={idx}>
-                      <td>{idx + 1}</td>
-                      <td>{ans.question_text}</td>
-                      <td>{ans.selected_answer || "-"}</td>
-                      <td>{ans.correct_answer || "-"}</td>
-                      <td>
-                        {ans.is_correct === null ? (
-                          <span className="badge bg-warning text-dark">
-                            Pending
-                          </span>
-                        ) : ans.is_correct ? (
-                          <span className="badge bg-success">Correct</span>
-                        ) : (
-                          <span className="badge bg-danger">Wrong</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
+                  <div className="p-3 border rounded bg-light shadow-sm mb-3">
+                    <p>
+                      <strong>Language:</strong>{" "}
+                      <span className="text-dark">
+                        {reviewData.language || "—"}
+                      </span>
+                    </p>
+                    <p>
+                      <strong>Submitted At:</strong>{" "}
+                      <span className="text-muted">
+                        {new Date(reviewData.submitted_at).toLocaleString()}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* 🧠 Submitted Code */}
+                  <div className="mt-3">
+                    <h6 className="fw-bold text-primary mb-2">
+                      <i className="bi bi-code-slash me-2"></i> Submitted Code
+                    </h6>
+                    <pre
+                      className="bg-dark text-white p-3 rounded"
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        maxHeight: "300px",
+                        overflowY: "auto",
+                      }}
+                    >
+                      {reviewData.code || "// No code submitted"}
+                    </pre>
+                  </div>
+
+                  {/* 🧾 Output */}
+                  <div className="mt-4">
+                    <h6 className="fw-bold text-primary mb-2">
+                      <i className="bi bi-terminal me-2"></i> Program Output
+                    </h6>
+                    <div
+                      className="p-3 bg-white border rounded"
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        fontFamily: "monospace",
+                        maxHeight: "200px",
+                        overflowY: "auto",
+                      }}
+                    >
+                      {reviewData.output ? (
+                        <pre className="m-0">{reviewData.output}</pre>
+                      ) : (
+                        <p className="text-muted fst-italic m-0">
+                          No output available.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* 🧩 QA EXAM RESULT */}
+                  <h5 className="fw-bold text-center mb-3">
+                    Score:{" "}
+                    <span className="text-success">
+                      {reviewData.score} / {reviewData.total_score}
+                    </span>
+                  </h5>
+
+                  <Table striped bordered hover>
+                    <thead className="table-light">
+                      <tr>
+                        <th>#</th>
+                        <th>Question</th>
+                        <th>Answer</th>
+                        <th>Correct Answer</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(reviewData.answers ?? []).map((ans, idx) => (
+                        <tr key={idx}>
+                          <td>{idx + 1}</td>
+                          <td>{ans.question_text}</td>
+                          <td>{ans.selected_answer || "-"}</td>
+                          <td>{ans.correct_answer || "-"}</td>
+                          <td>
+                            {ans.is_correct === null ? (
+                              <span className="badge bg-warning text-dark">
+                                Pending
+                              </span>
+                            ) : ans.is_correct ? (
+                              <span className="badge bg-success">Correct</span>
+                            ) : (
+                              <span className="badge bg-danger">Wrong</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </>
+              )}
             </>
           ) : (
             <p className="text-muted text-center">No review data available.</p>

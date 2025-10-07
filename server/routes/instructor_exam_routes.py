@@ -30,7 +30,7 @@ def get_exams_by_instructor(instructor_id):
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute("""
-            SELECT id, title, description, duration_minutes, created_at,
+            SELECT id, exam_type, exam_category, title, description, duration_minutes, created_at,
                    exam_date, start_time, exam_file
             FROM exams
             WHERE instructor_id = %s

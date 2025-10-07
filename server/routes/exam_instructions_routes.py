@@ -73,3 +73,39 @@ def upsert_exam_instructions(exam_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+# ===============================
+# 🧠 Get Coding Exam Submission
+# ===============================
+@exam_instructions_bp.route("/coding_submission/<int:exam_id>/<int:student_id>", methods=["GET"])
+def get_coding_submission(exam_id, student_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # 🔍 Fetch coding submission for this exam & student
+        cursor.execute("""
+            SELECT 
+                'CODING' AS category,
+                language,
+                code,
+                output,
+                submitted_at
+            FROM coding_submissions
+            WHERE exam_id = %s AND student_id = %s
+            ORDER BY submitted_at DESC
+            LIMIT 1
+        """, (exam_id, student_id))
+
+        submission = cursor.fetchone()
+
+        if not submission:
+            return jsonify({"message": "No coding submission found"}), 404
+
+        conn.close()
+        return jsonify(submission), 200
+
+    except Exception as e:
+        print("[ERROR] Fetching coding submission failed:", e)
+        return jsonify({"error": str(e)}), 500
+

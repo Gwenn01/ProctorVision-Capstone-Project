@@ -143,6 +143,8 @@ def get_exams_by_instructor(instructor_id):
             SELECT 
                 id,
                 instructor_id,
+                exam_type,
+                exam_category,
                 title,
                 description,
                 duration_minutes,
